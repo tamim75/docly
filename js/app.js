@@ -452,7 +452,7 @@ function setMailWait(ms){ const until = Date.now() + ms; U.mailUntil = until; tr
 function mmss(ms){ const t = Math.ceil(ms/1000); return Math.floor(t/60) + ':' + String(t%60).padStart(2,'0'); }
 function loginForm(desk){
   const wait = LIVE ? mailLeft() : 0;
-  const errHtml = wait ? `<span class="err-text" id="emailErr" role="status">Too many sign-in emails sent. Try again in <b id="mailWait">${mmss(wait)}</b>.</span>` : (U.emailErr ? `<span class="err-text" id="emailErr">${esc(U.emailErr)}</span>` : '');
+  const errHtml = wait ? `<span class="err-text" id="emailErr" role="status">${wait > 300000 ? 'Wait about an hour.' : 'Wait a moment.'} Try again in <b id="mailWait">${mmss(wait)}</b>.</span>` : (U.emailErr ? `<span class="err-text" id="emailErr">${esc(U.emailErr)}</span>` : '');
   const title = U.authMode === 'signin' ? 'Welcome back.' : 'Create your account.';
   const fields = `<div class="field"><label for="email">Your Email</label>
       <input class="input ${U.emailErr || wait ? 'err' : ''}" id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@email.com" value="${esc(U.emailDraft || '')}" aria-describedby="emailErr">
