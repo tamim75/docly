@@ -440,20 +440,26 @@ function authView(name, desk){
       <div class="bottom"><a class="btn btn-primary btn-block" href="#login">Get started${I('arrow_forward')}</a>
       <span class="small-link">Already have an account? <a class="link" href="#login">Sign in</a></span></div></div>`;
   if (name === 'login') return `<form class="auth-m" data-form="login" novalidate><div class="grow">${loginForm(false)}</div>
-      <div class="bottom"><button class="btn btn-primary btn-block" type="submit">Send code${I('arrow_forward')}</button>
+      <div class="bottom"><button class="btn btn-primary btn-block" type="submit"${LIVE && mailLeft() ? " disabled" : ""}>Send code${I('arrow_forward')}</button>
       <span class="small-link">${U.authMode === 'signin' ? `New to Docly? <a class="link" href="#" data-act="mode">Create an account</a>` : `Have an account? <a class="link" href="#" data-act="mode">Sign in</a>`}</span></div></form>`;
   return `<form class="auth-m" data-form="code" novalidate><div class="grow">${logo()}${codeBlock(false, true)}</div>
       <div class="bottom"><button class="btn btn-primary btn-block" type="submit">Verify${I('arrow_forward')}</button>
       <span class="small-link">Wrong email? <a class="link" href="#login">Change email</a></span></div></form>`;
 }
+const MAILKEY = 'docly_mail_wait';
+function mailLeft(){ let t = 0; try { t = +localStorage.getItem(MAILKEY) || 0; } catch(e) { t = U.mailUntil || 0; } return Math.max(0, t - Date.now()); }
+function setMailWait(ms){ const until = Date.now() + ms; U.mailUntil = until; try { localStorage.setItem(MAILKEY, String(until)); } catch(e) {} }
+function mmss(ms){ const t = Math.ceil(ms/1000); return Math.floor(t/60) + ':' + String(t%60).padStart(2,'0'); }
 function loginForm(desk){
+  const wait = LIVE ? mailLeft() : 0;
+  const errHtml = wait ? `<span class="err-text" id="emailErr" role="status">Too many sign-in emails sent. Try again in <b id="mailWait">${mmss(wait)}</b>.</span>` : (U.emailErr ? `<span class="err-text" id="emailErr">${esc(U.emailErr)}</span>` : '');
   const title = U.authMode === 'signin' ? 'Welcome back.' : 'Create your account.';
   const fields = `<div class="field"><label for="email">Your Email</label>
-      <input class="input ${U.emailErr ? 'err' : ''}" id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@email.com" value="${esc(U.emailDraft || '')}" aria-describedby="emailErr">
-      ${U.emailErr ? `<span class="err-text" id="emailErr">${esc(U.emailErr)}</span>` : ''}</div>`;
+      <input class="input ${U.emailErr || wait ? 'err' : ''}" id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@email.com" value="${esc(U.emailDraft || '')}" aria-describedby="emailErr">
+      ${errHtml}</div>`;
   if (!desk) return `${logo()}<div style="display:flex;flex-direction:column;gap:13px"><h1>${title}</h1><p class="lead">Enter your email. We'll send you a 6-digit code, no password needed.</p></div>${fields}`;
   return `<form data-form="login" class="form" novalidate style="gap:21px"><div><h2>${title}</h2><p class="lead" style="margin-top:8px">Enter your email. We'll send you a 6-digit code, no password needed.</p></div>
-    ${fields}<button class="btn btn-primary btn-block" type="submit">Send code${I('arrow_forward')}</button>
+    ${fields}<button class="btn btn-primary btn-block" type="submit"${wait ? ' disabled' : ''}>Send code${I('arrow_forward')}</button>
     <span class="small-link" style="text-align:center">${U.authMode === 'signin' ? `New to Docly? <a class="link" href="#" data-act="mode">Create an account</a>` : `Have an account? <a class="link" href="#" data-act="mode">Sign in</a>`}</span></form>`;
 }
 function codeBlock(desk, inForm){
@@ -1154,10 +1160,12 @@ const FORMS = {
   login(f){ const v = (f.querySelector('#email').value || '').trim(); U.emailDraft = v;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { U.emailErr = v ? 'That email looks incomplete. Check it and try again.' : 'Enter your email to get a code.'; render(); document.getElementById('email')?.focus(); return; }
     U.emailErr = ''; S.email = v.toLowerCase();
+    if (LIVE && mailLeft()) { render(); return; }
     if (!LIVE) { save(); U.resendAt = Date.now() + 30000; U.otpErr = ''; U.expired = false; U.tries = 3; go('code'); return; }
     if (U.busy) return; U.busy = true;
     API.sendCode(S.email).then(() => { U.busy = false; U.resendAt = Date.now() + 60000; U.otpErr = ''; U.expired = false; U.tries = 3; go('code'); },
-      err => { U.busy = false; const m = friendly(err); U.emailErr = /seconds/i.test(m) ? 'Please wait a minute before asking for another email.' : /rate|too many/i.test(m) ? 'Too many sign-in emails sent. Please try again in an hour.' : m; render(); }); },
+      err => { U.busy = false; const m = friendly(err); const secs = /(\d+)\s*seconds/i.exec((err && err.message) || m); const limited = err && (err.status === 429 || /rate|too many|seconds/i.test((err.message || '') + m));
+        if (limited) { setMailWait(secs ? (+secs[1] + 1) * 1000 : 3600000); U.emailErr = ''; } else U.emailErr = m; render(); }); },
   code(f){ const code = [...f.querySelectorAll('[data-otp]')].map(i => i.value).join(''); if (code.length < 6) { U.otpErr = 'Enter all 6 digits.'; render(); return; } submitCode(code); },
   visit(f){
     snapshotForm(); const D = U.draft, val = n => (f.querySelector(`[name="${n}"]`) || {}).value || '';
@@ -1212,8 +1220,11 @@ document.addEventListener('submit', e => { const f = e.target.closest('form[data
 
 /* Resend countdown */
 let tick;
+let mailTick;
 function afterDraw(){
-  clearInterval(tick);
+  clearInterval(tick); clearInterval(mailTick);
+  if (document.getElementById('mailWait')) mailTick = setInterval(() => { const left = mailLeft(); const el = document.getElementById('mailWait');
+    if (!el || !left) { clearInterval(mailTick); if (el) render(); return; } el.textContent = mmss(left); }, 1000);
   if (parse().name === 'code' && !S.signedIn) {
     const first = document.querySelector('[data-otp="0"]'); if (first && !document.activeElement?.dataset?.otp) first.focus();
     tick = setInterval(() => { const el = document.getElementById('resend'); if (!el) return; const left = Math.max(0, Math.ceil((U.resendAt - Date.now())/1000));
