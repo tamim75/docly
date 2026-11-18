@@ -1157,7 +1157,7 @@ const FORMS = {
     if (!LIVE) { save(); U.resendAt = Date.now() + 30000; U.otpErr = ''; U.expired = false; U.tries = 3; go('code'); return; }
     if (U.busy) return; U.busy = true;
     API.sendCode(S.email).then(() => { U.busy = false; U.resendAt = Date.now() + 60000; U.otpErr = ''; U.expired = false; U.tries = 3; go('code'); },
-      err => { U.busy = false; const m = friendly(err); U.emailErr = /rate|seconds|too many/i.test(m) ? 'Too many codes sent. Wait a minute, then try again.' : m; render(); }); },
+      err => { U.busy = false; const m = friendly(err); U.emailErr = /seconds/i.test(m) ? 'Please wait a minute before asking for another email.' : /rate|too many/i.test(m) ? 'Too many sign-in emails sent. Please try again in an hour.' : m; render(); }); },
   code(f){ const code = [...f.querySelectorAll('[data-otp]')].map(i => i.value).join(''); if (code.length < 6) { U.otpErr = 'Enter all 6 digits.'; render(); return; } submitCode(code); },
   visit(f){
     snapshotForm(); const D = U.draft, val = n => (f.querySelector(`[name="${n}"]`) || {}).value || '';
