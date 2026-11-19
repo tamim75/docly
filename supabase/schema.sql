@@ -134,6 +134,8 @@ begin
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "own rows" on public.%I', t);
     execute format('create policy "own rows" on public.%I for all to authenticated using (owner = auth.uid()) with check (owner = auth.uid())', t);
+    -- Newer Supabase projects don't grant table access to signed-in users by default.
+    execute format('grant select, insert, update, delete on public.%I to authenticated', t);
   end loop;
 end $$;
 
@@ -335,3 +337,8 @@ drop policy if exists "records: admins read" on storage.objects;
 create policy "records: admins read" on storage.objects for select to authenticated using (bucket_id = 'records' and public.is_admin());
 drop policy if exists "records: admins delete" on storage.objects;
 create policy "records: admins delete" on storage.objects for delete to authenticated using (bucket_id = 'records' and public.is_admin());
+
+-- ---------- Table access for signed-in users (RLS above still limits which rows) ----------
+grant usage on schema public to authenticated;
+grant select on public.admins to authenticated;
+grant select on public.admin_access_log to authenticated;
