@@ -207,6 +207,18 @@ const API = {
     if (error) throw error;
     USER = data.user; S.email = USER.email; return true;
   },
+  async signInPassword(email, password){
+    if (!LIVE) { if (!S.hasPass) throw new Error('Invalid login credentials'); return true; }
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    USER = data.user; S.email = USER.email; return true;
+  },
+  async setPassword(password){
+    if (!LIVE) { S.hasPass = true; save(); return; }
+    const { data, error } = await sb.auth.updateUser({ password, data:{ has_password:true } });
+    if (error) throw error;
+    if (data && data.user) USER = data.user;
+  },
   async signOut(){ if (LIVE) await sb.auth.signOut(); },
   log(icon, text, href){
     const who = (S.profiles.find(x => x.rel === 'you') || prof()).short;
@@ -357,7 +369,7 @@ const STACK = [];
 function go(h){ if (h === CUR) { render(true); return; } CUR = h; try { history.pushState(null, '', '#' + h); } catch(e) { /* sandboxed frame: route in memory */ } onRoute(); }
 
 const TAB_OF = { home:'home', tests:'tests', test:'tests', doctors:'doctors', doctor:'doctors', visit:'doctors', photo:'doctors', 'add-visit':'doctors', editvisit:'doctors', 'add-doctor':'doctors', editdoctor:'doctors',
-  me:'me', admin:'admin', adminuser:'admin', history:'me', activity:'me', share:'me', profiles:'me', 'add-profile':'me', meds:'me', 'add-med':'me', 'add-test':'tests' };
+  me:'me', password:'me', admin:'admin', adminuser:'admin', history:'me', activity:'me', share:'me', profiles:'me', 'add-profile':'me', meds:'me', 'add-med':'me', 'add-test':'tests' };
 
 function render(scrollTop){
   const desk = mq.matches;
@@ -440,12 +452,24 @@ function authView(name, desk){
       <div class="bottom"><a class="btn btn-primary btn-block" href="#login">Get started${I('arrow_forward')}</a>
       <span class="small-link">Already have an account? <a class="link" href="#login">Sign in</a></span></div></div>`;
   if (name === 'login') return `<form class="auth-m" data-form="login" novalidate><div class="grow">${loginForm(false)}</div>
-      <div class="bottom"><button class="btn btn-primary btn-block" type="submit"${LIVE && mailLeft() ? " disabled" : ""}>Send code${I('arrow_forward')}</button>
+      <div class="bottom">${loginBtn()}${passSwitch()}
       <span class="small-link">${U.authMode === 'signin' ? `New to Docly? <a class="link" href="#" data-act="mode">Create an account</a>` : `Have an account? <a class="link" href="#" data-act="mode">Sign in</a>`}</span></div></form>`;
   return `<form class="auth-m" data-form="code" novalidate><div class="grow">${logo()}${codeBlock(false, true)}</div>
       <div class="bottom"><button class="btn btn-primary btn-block" type="submit">Verify${I('arrow_forward')}</button>
       <span class="small-link">Wrong email? <a class="link" href="#login">Change email</a></span></div></form>`;
 }
+function hasPass(){ return LIVE ? !!(USER && USER.user_metadata && USER.user_metadata.has_password) : !!S.hasPass; }
+const NUDGEKEY = 'docly_pass_nudge_off';
+function passNudgeOff(){ try { return localStorage.getItem(NUDGEKEY) === (LIVE && USER ? USER.id : 'demo'); } catch(e) { return !!U.nudgeOff; } }
+function passNudge(){
+  if (hasPass() || passNudgeOff()) return '';
+  return `<div class="card nudge" role="note">${tile('key')}<div class="nt"><b>Add a password</b><span>Sign in on a new device without waiting for an email.</span></div>
+    <a class="btn btn-primary btn-sm" href="#password">Add password</a><button type="button" class="x" data-act="nudgeoff" aria-label="Not now">${I('close')}</button></div>`;
+}
+function loginBtn(){ const pw = U.usePass && U.authMode === 'signin';
+  return `<button class="btn btn-primary btn-block" type="submit"${!pw && LIVE && mailLeft() ? ' disabled' : ''}>${pw ? 'Sign in' : 'Send code'}${I('arrow_forward')}</button>`; }
+function passSwitch(){ if (U.authMode !== 'signin') return '';
+  return `<span class="small-link" style="text-align:center">${U.usePass ? `Forgot it? <a class="link" href="#" data-act="usepass">Use an email code instead</a>` : `Have a password? <a class="link" href="#" data-act="usepass">Sign in with password</a>`}</span>`; }
 const MAILKEY = 'docly_mail_wait';
 function mailLeft(){ let t = 0; try { t = +localStorage.getItem(MAILKEY) || 0; } catch(e) { t = U.mailUntil || 0; } return Math.max(0, t - Date.now()); }
 function setMailWait(ms){ const until = Date.now() + ms; U.mailUntil = until; try { localStorage.setItem(MAILKEY, String(until)); } catch(e) {} }
@@ -453,13 +477,19 @@ function mmss(ms){ const t = Math.ceil(ms/1000); return Math.floor(t/60) + ':' +
 function loginForm(desk){
   const wait = LIVE ? mailLeft() : 0;
   const errHtml = wait ? `<span class="err-text" id="emailErr" role="status">${wait > 300000 ? 'Limit: 2 emails per hour.' : 'Please wait.'} Try again in <b id="mailWait">${mmss(wait)}</b>.</span>` : (U.emailErr ? `<span class="err-text" id="emailErr">${esc(U.emailErr)}</span>` : '');
+  const pw = U.usePass && U.authMode === 'signin';
   const title = U.authMode === 'signin' ? 'Welcome back.' : 'Create your account.';
+  const lead = pw ? 'Enter your email and password.' : "Enter your email. We'll send you a 6-digit code, no password needed.";
+  const pwField = pw ? `<div class="field"><label for="password">Password</label>
+      <div class="pw"><input class="input ${U.passErr ? 'err' : ''}" id="password" name="password" type="${U.showPw ? 'text' : 'password'}" autocomplete="current-password" placeholder="Your password" aria-describedby="passErr">
+      <button type="button" class="eye" data-act="showpw" aria-label="${U.showPw ? 'Hide password' : 'Show password'}">${I(U.showPw ? 'visibility_off' : 'visibility')}</button></div>
+      ${U.passErr ? `<span class="err-text" id="passErr">${esc(U.passErr)}</span>` : ''}</div>` : '';
   const fields = `<div class="field"><label for="email">Your Email</label>
       <input class="input ${U.emailErr || wait ? 'err' : ''}" id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@email.com" value="${esc(U.emailDraft || '')}" aria-describedby="emailErr">
-      ${errHtml}</div>`;
-  if (!desk) return `${logo()}<div style="display:flex;flex-direction:column;gap:13px"><h1>${title}</h1><p class="lead">Enter your email. We'll send you a 6-digit code, no password needed.</p></div>${fields}`;
-  return `<form data-form="login" class="form" novalidate style="gap:21px"><div><h2>${title}</h2><p class="lead" style="margin-top:8px">Enter your email. We'll send you a 6-digit code, no password needed.</p></div>
-    ${fields}<button class="btn btn-primary btn-block" type="submit"${wait ? ' disabled' : ''}>Send code${I('arrow_forward')}</button>
+      ${pw ? (U.emailErr ? `<span class="err-text" id="emailErr">${esc(U.emailErr)}</span>` : '') : errHtml}</div>${pwField}`;
+  if (!desk) return `${logo()}<div style="display:flex;flex-direction:column;gap:13px"><h1>${title}</h1><p class="lead">${lead}</p></div>${fields}`;
+  return `<form data-form="login" class="form" novalidate style="gap:21px"><div><h2>${title}</h2><p class="lead" style="margin-top:8px">${lead}</p></div>
+    ${fields}${loginBtn()}${passSwitch()}
     <span class="small-link" style="text-align:center">${U.authMode === 'signin' ? `New to Docly? <a class="link" href="#" data-act="mode">Create an account</a>` : `Have an account? <a class="link" href="#" data-act="mode">Sign in</a>`}</span></form>`;
 }
 function codeBlock(desk, inForm){
@@ -515,6 +545,7 @@ function homeDesk(){
   return { desk: `
     <header class="dhead"><div><h1>${greeting()}, ${esc(p.short)}</h1><p>${plural(recordCount(),'health record')}${vs.length ? ' · last added ' + lastAdded() : ''}</p></div>
       <div class="acts"><button type="button" class="btn btn-white" data-act="snap">${I('photo_camera')}Snap report</button><a class="btn btn-primary" href="#add-visit">${I('add')}Add visit</a></div></header>
+    ${passNudge()}
     <div class="stats">
       ${stat(overdue.length, overdue.length === 1 ? 'Overdue follow-up' : 'Overdue follow-ups', overdue.map(v => doc(v.doc).name).join(', '), overdue[0] ? 'visit-' + overdue[0].id : 'doctors')}
       ${stat(pt.length, 'Tests pending', pt.map(t => t.name).join(', '), 'tests')}
@@ -555,7 +586,7 @@ function homeMob(){
   const pts = pt.length ? `<div class="card list div">${pt.slice(0,3).map(t => row({ lead: tile(t.name === 'ECG' ? 'ecg_heart' : 'science'), t: esc(t.name),
       s: t.status === 'done' ? 'Report not added yet' : `Advised by ${esc(doc(t.doc)?.name || '')}`,
       end: `<span class="end"><span class="s num">${t.status === 'advised' ? 'Due ' : ''}${dm(t.date)}</span>${t.status === 'advised' ? pill('To do','blue') : pill('Done','teal')}</span>`, href:`test-${t.id}` })).join('')}</div>` : '';
-  return { noHead:true, body: `${top}${hero}${month}${ql}
+  return { noHead:true, body: `${top}${hero}${passNudge()}${month}${ql}
     <section>${secH('Recent visits','See all','doctors')}<div class="card list div">${rv}</div></section>
     ${att || pts ? `<section>${secH('Needs attention')}<div class="stack-sm">${att}${pts}</div></section>` : ''}` };
 }
@@ -811,12 +842,23 @@ VIEWS.me = (r, desk) => {
   const viewed = !LIVE ? '' : `<section>${secH('Who viewed my records')}<div class="card list div">${!Array.isArray(U.accessLog) ? emptyRow('Loading…')
       : U.accessLog.length ? U.accessLog.slice(0, 5).map(a => row({ lead: tile('visibility'), t: `Docly support viewed ${esc(a.what === 'all records' ? 'your records' : 'a file')}`, s: `${esc(fmtWhen(a.created_at))}${a.reason ? ' · ' + esc(a.reason) : ''}` })).join('')
       : emptyRow('No one at Docly has opened your records.')}</div></section>`;
-  const right = `<div class="stack">${S.isAdmin ? `<section>${secH('Admin')}<div class="card list">${row({ lead: tile('admin_panel_settings'), t:'Admin', s:'Users, records and access log', end: chev(), href:'admin' })}</div></section>` : ''}<section>${secH('Account')}<div class="card list">${row({ lead: tile('arrow_back'), t:'Sign out', end: chev(), act:'signout' })}</div></section>${viewed}
+  const right = `<div class="stack">${S.isAdmin ? `<section>${secH('Admin')}<div class="card list">${row({ lead: tile('admin_panel_settings'), t:'Admin', s:'Users, records and access log', end: chev(), href:'admin' })}</div></section>` : ''}<section>${secH('Account')}<div class="card list div">${row({ lead: tile('key'), t: hasPass() ? 'Change password' : 'Add a password', s: hasPass() ? 'Sign in with email and password' : 'Not set · sign in without waiting for an email', end: chev(), href:'password' })}${row({ lead: tile('arrow_back'), t:'Sign out', end: chev(), act:'signout' })}</div></section>${viewed}
     <section>${secH('Danger zone')}<div class="card pad" style="text-align:center"><button type="button" class="btn btn-danger btn-block btn-md" data-act="askdelete">Delete account</button><p class="hint" style="margin-top:13px;font-size:11px">Erases every profile, visit and report. This can't be undone.</p>${del}</div></section></div>`;
   const left = `<div class="stack"><div class="card list div">${profileRows()}</div>${desk ? '' : `<a class="btn btn-primary btn-block" href="#add-profile">${I('add')}Add profile</a>
      <section>${secH('Records')}<div class="card list div">${row({ lead: tile('medication'), t:'Medications', s:`${meds().filter(m => m.status==='current').length} current`, end: chev(), href:'meds' })}${row({ lead: tile('monitor_heart'), t:'Medical history', s:'Built from your visits', end: chev(), href:'history' })}</div></section>`}</div>`;
   const inner = desk ? `<div class="split-r" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">${left}${right}</div>` : `${left}${right}`;
   return meWrap('me', 'Me', `Signed in as ${esc(S.email)}`, inner, desk, `<a class="btn btn-white btn-md" href="#add-profile">${I('add')}Add profile</a>`);
+};
+VIEWS.password = (r, desk) => {
+  const e = U.formErr || {}, has = hasPass();
+  const f = `<div class="field"><label for="np1">New password</label><input class="input ${e.p1 ? 'err' : ''}" id="np1" name="p1" type="${U.showPw ? 'text' : 'password'}" autocomplete="new-password" placeholder="At least 8 characters" value="${esc((U.pwDraft || [])[0] || '')}">
+      ${e.p1 ? `<span class="err-text">${esc(e.p1)}</span>` : `<span class="hint">At least 8 characters. Use letters and numbers.</span>`}</div>
+    <div class="field"><label for="np2">Confirm password</label><input class="input ${e.p2 ? 'err' : ''}" id="np2" name="p2" type="${U.showPw ? 'text' : 'password'}" autocomplete="new-password" placeholder="Type it again" value="${esc((U.pwDraft || [])[1] || '')}">
+      ${e.p2 ? `<span class="err-text">${esc(e.p2)}</span>` : ''}</div>
+    <label class="check"><input type="checkbox" data-act="showpw2"${U.showPw ? ' checked' : ''}> Show passwords</label>`;
+  return simpleForm('password', has ? 'Change password' : 'Add a password',
+    has ? 'Pick a new password. You can still sign in with an email code any time.' : 'Sign in on any device with your email and this password. Email codes keep working too.',
+    f, has ? 'Update password' : 'Save password', 'me', desk);
 };
 VIEWS.profiles = (r, desk) => ({ title:'Profiles', sub:"Pick who you're managing. The whole app switches to that person.", back:'home',
   body: `<div class="card list div">${profileRows()}</div><a class="btn btn-primary btn-block" href="#add-profile">${I('add')}Add profile</a>` });
@@ -1041,6 +1083,10 @@ const ACTS = {
   back(el){ STACK.pop(); const prev = STACK.pop(); go(prev != null ? prev : (el.dataset.fallback || 'home')); },
   go(el){ go(el.dataset.href); },
   toast(el, e){ e.preventDefault(); toast(el.dataset.msg); },
+  usepass(el, e){ e.preventDefault(); U.emailDraft = document.getElementById('email')?.value || U.emailDraft; U.usePass = !U.usePass; U.passErr = ''; render(); document.getElementById(U.usePass ? 'password' : 'email')?.focus(); },
+  showpw(el, e){ e.preventDefault(); const v = document.getElementById('password')?.value || ''; U.showPw = !U.showPw; render(); const i = document.getElementById('password'); if (i) { i.value = v; i.focus(); } },
+  showpw2(el){ U.showPw = el.checked; ['np1','np2'].forEach(id => { const i = document.getElementById(id); if (i) i.type = el.checked ? 'text' : 'password'; }); },
+  nudgeoff(){ U.nudgeOff = true; try { localStorage.setItem(NUDGEKEY, LIVE && USER ? USER.id : 'demo'); } catch(e) {} render(); },
   mode(el, e){ e.preventDefault(); U.authMode = U.authMode === 'signin' ? 'signup' : 'signin'; render(); },
   resend(el, e){ e.preventDefault(); API.sendCode(S.email).then(() => { U.resendAt = Date.now() + 60000; U.otpErr = ''; U.expired = false; U.tries = 3; toast('New code sent'); }, err => { U.otpErr = friendly(err); render(); }); },
   fab(){ openSheet({ title:'Add a record', items:[
@@ -1135,6 +1181,11 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('paste', e => { const t = e.target; if (t.dataset && t.dataset.otp != null) { e.preventDefault(); fillOtp((e.clipboardData.getData('text') || '').replace(/\D/g, '')); } });
 function fillOtp(v){ const ins = [...document.querySelectorAll('[data-otp]')]; v.slice(0,6).split('').forEach((c,i) => { ins[i].value = c; }); (ins[Math.min(v.length,5)] || ins[5]).focus(); if (v.length >= 6) submitCode(v.slice(0,6)); }
+async function afterSignIn(){
+  U.busy = false; U.otpErr = ''; U.passErr = ''; U.tries = 3; S.signedIn = true; S.loading = true; render();
+  if (LIVE) { try { await API.loadAll(); } catch(e) { U.toast = 'Could not load your records. ' + friendly(e); } }
+  S.loading = false; save(); go('home');
+}
 function submitCode(code){
   if (U.expired || U.busy) return;
   if (LIVE) {
@@ -1160,6 +1211,13 @@ const FORMS = {
   login(f){ const v = (f.querySelector('#email').value || '').trim(); U.emailDraft = v;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { U.emailErr = v ? 'That email looks incomplete. Check it and try again.' : 'Enter your email to get a code.'; render(); document.getElementById('email')?.focus(); return; }
     U.emailErr = ''; S.email = v.toLowerCase();
+    if (U.usePass && U.authMode === 'signin') { const pwv = f.querySelector('#password')?.value || '';
+      if (!pwv) { U.passErr = 'Enter your password.'; render(); document.getElementById('password')?.focus(); return; }
+      U.passErr = ''; if (U.busy) return; U.busy = true;
+      API.signInPassword(S.email, pwv).then(afterSignIn, err => { U.busy = false; const m = friendly(err);
+        U.passErr = /invalid login|credentials/i.test(m) ? "Wrong email or password. No password yet? Use an email code instead." : /confirm/i.test(m) ? 'Confirm your email first. Use an email code instead.' : m;
+        render(); document.getElementById('password')?.select(); });
+      return; }
     if (LIVE && mailLeft()) { render(); return; }
     if (!LIVE) { save(); U.resendAt = Date.now() + 30000; U.otpErr = ''; U.expired = false; U.tries = 3; go('code'); return; }
     if (U.busy) return; U.busy = true;
@@ -1207,6 +1265,12 @@ const FORMS = {
   med(f){ const fd = new FormData(f), name = (fd.get('name') || '').trim(); if (!name) { U.formErr = { name:'Add the medicine name.' }; render(); return; } U.formErr = {};
     busy(async () => { await API.createMed({ name, dose:(fd.get('dose') || '').trim(), doc: fd.get('doc'), visit: fd.get('visit'), since: fd.get('since') || iso(LIVE ? new Date() : TODAY), status: fd.get('status') });
       log('medication', `Added ${name}`, 'meds'); save(); U.medFilter = fd.get('status'); setHash('meds'); render(true); toast('Medication saved'); }); },
+  password(f){ const a = f.querySelector('#np1').value, b = f.querySelector('#np2').value, err = {};
+    if (a.length < 8) err.p1 = 'Use at least 8 characters.'; else if (!/[a-z]/i.test(a) || !/\d/.test(a)) err.p1 = 'Use both letters and numbers.';
+    if (!err.p1 && a !== b) err.p2 = "Passwords don't match.";
+    U.formErr = err; if (err.p1 || err.p2) { U.pwDraft = [a, b]; render(); return; } U.pwDraft = null;
+    const had = hasPass();
+    busy(async () => { await API.setPassword(a); U.showPw = false; log('key', had ? 'Changed password' : 'Added a password', 'me'); save(); setHash('me'); render(true); toast(had ? 'Password updated' : 'Password saved. You can now sign in with it.'); }); },
   profile(f){ const fd = new FormData(f), name = (fd.get('name') || '').trim(); if (!name) { U.formErr = { name:'Add a name.' }; render(); return; } U.formErr = {};
     busy(async () => { const p = await API.createProfile({ name, rel: (fd.get('rel') || '').trim().toLowerCase() || 'family', blood: fd.get('blood') || '', dob: fd.get('dob') || '' });
       S.active = p.id; log('group', `Added profile ${p.short} (${p.rel})`, 'profiles'); save(); setHash('home'); render(true); toast(`Now viewing ${p.short}. Add their first visit.`); }); },
