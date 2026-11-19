@@ -788,7 +788,7 @@ function doctorForm(d, desk){
   return simpleForm('doctor', d ? 'Edit doctor' : 'Add doctor', 'Visits, tests and chambers are grouped under each doctor.', f, d ? 'Save changes' : 'Save doctor', d ? 'doctor-' + d.id : 'doctors', desk, d?.id);
 }
 function simpleForm(kind, title, sub, fields, cta, back, desk, id=''){
-  if (desk) return { desk: `<form data-form="${kind}" data-id="${id}" novalidate class="stack" style="gap:34px"><header class="dhead"><div><h1>${title}</h1><p>${sub}</p></div>
+  if (desk) return { desk: `<form data-form="${kind}" data-id="${id}" novalidate class="stack" style="gap:34px"><header class="dhead"><div class="dtitle"><button type="button" class="icon-btn" data-act="back" data-fallback="${back}" aria-label="Back">${I('arrow_back')}</button><div><h1>${title}</h1><p>${sub}</p></div></div>
       <div class="acts"><button type="button" class="btn btn-white btn-md" data-act="back" data-fallback="${back}">Cancel</button><button class="btn btn-primary btn-md" type="submit">${cta}</button></div></header>
       <div class="card formcard form">${fields}</div></form>` };
   return { title, sub, back, body:`<form data-form="${kind}" data-id="${id}" id="sf" novalidate class="form">${fields}</form>`, stick:`<button class="btn btn-primary btn-block" type="submit" form="sf">${cta}</button>` };
