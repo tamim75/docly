@@ -613,7 +613,7 @@ function doctorBlocks(d, desk){
 function doctorsDesk(selId){
   const ds = docs(), d = doc(selId);
   const pend = pendingTests().length;
-  return { desk: `<header class="dhead"><div><h1>Doctors</h1><p>${plural(ds.length,'doctor')} · ${plural(pend,'pending test')}</p></div>
+  return { desk: `<header class="dhead"><div><h1>Doctors</h1></div>
       <div class="acts"><a class="btn btn-ghost" href="#add-doctor">${I('add')}Add doctor</a></div></header>
     ${ds.length ? `<div class="split"><div class="card list div doclist">${docListRows(selId)}</div>
       <div class="stack">
@@ -624,7 +624,7 @@ function doctorsDesk(selId){
 }
 function doctorsMob(){
   const ds = docs();
-  return { title:'Doctors', sub:`${plural(ds.length,'doctor')} · ${plural(pendingTests().length,'pending test')}`,
+  return { title:'Doctors', sub:'',
     action:`<a class="icon-btn" href="#add-doctor" aria-label="Add doctor">${I('add')}</a>`,
     body: ds.length ? `<div class="card list div doclist">${docListRows()}</div>` : `<div class="card">${emptyRow('No doctors yet.','Add doctor','add-doctor')}</div>` };
 }
