@@ -679,7 +679,7 @@ function visitForm(v, desk){
     ${v ? '' : `<div class="field"><label for="f_test">Tests advised</label>
       <div style="display:flex;gap:8px"><input class="input" id="f_test" placeholder="Test name, e.g. Lipid profile" data-enter="addtest"><button type="button" class="btn btn-white" data-act="addtest" style="flex:none">${I('add')}Add</button></div>
       ${D.tests.length ? `<div class="added-tests">${D.tests.map((t,i) => `<span class="chip">${I('science')}${esc(t)}<button type="button" data-act="rmtest" data-i="${i}" aria-label="Remove ${esc(t)}">${I('close')}</button></span>`).join('')}</div>` : ''}</div>`}
-    <div class="grid2"><div class="field"><label for="f_cost">Cost</label><div class="affix"><span class="pre">৳</span><input class="input" id="f_cost" name="cost" inputmode="numeric" placeholder="0" value="${v?.cost ?? ''}"></div></div>
+    <div class="grid2"><div class="field"><label for="f_cost">Doctor&#39;s fee</label><div class="affix"><span class="pre">৳</span><input class="input" id="f_cost" name="cost" inputmode="numeric" placeholder="0" value="${v?.cost ?? ''}"></div></div>
       <div class="field"><label for="f_follow">Next follow-up</label><input class="input" type="date" id="f_follow" name="follow" value="${v?.follow || ''}"></div></div>`;
   const title = v ? 'Edit visit' : 'Add visit';
   const crumb = d ? `<a href="#doctors">Doctors</a> / <a href="#doctor-${d.id}">${esc(d.name)}</a>` : `<a href="#doctors">Doctors</a>`;
