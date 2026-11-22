@@ -8,6 +8,9 @@ const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','
 const pd = s => { const [y,m,d] = String(s).split('-').map(Number); return new Date(y, (m||1)-1, d||1); };
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const dm = s => { const d = pd(s); return `${d.getDate()} ${MON[d.getMonth()]}`; };
+const t12 = s => { const [h, m] = String(s).split(':').map(Number); return `${(h % 12) || 12}:${String(m || 0).padStart(2,'0')} ${h < 12 ? 'AM' : 'PM'}`; };
+const fmtSize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+const banner = (tone, icon, text) => `<div class="banner ${tone}" role="${tone === 'error' ? 'alert' : 'status'}">${I(icon)}<span>${text}</span></div>`;
 const dmy = s => { const d = pd(s); return `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`; };
 const my = s => { const d = pd(s); return `${MON[d.getMonth()]} ${d.getFullYear()}`; };
 const dd = s => String(pd(s).getDate()).padStart(2,'0');
@@ -174,6 +177,32 @@ async function upload(fd){
   return { path, kind: isImg ? 'image' : 'pdf', name: isImg ? (fd.name || 'Photo.jpg') : fd.pdf, url: urls[path] || '' };
 }
 
+function uploadXhr(fd, onPct){
+  return (async () => {
+    const isImg = !!fd.img, ext = isImg ? 'jpg' : ((fd.pdf || '').split('.').pop() || 'pdf').toLowerCase();
+    const path = `${USER.id}/${crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2)}.${ext}`;
+    const blob = await toBlob(fd), type = isImg ? 'image/jpeg' : (fd.file && fd.file.type) || 'application/pdf';
+    const { data } = await sb.auth.getSession(); const tok = data && data.session && data.session.access_token;
+    await new Promise((res, rej) => { const x = new XMLHttpRequest();
+      x.open('POST', `${CFG.supabaseUrl}/storage/v1/object/records/${path}`);
+      x.setRequestHeader('Authorization', 'Bearer ' + tok); x.setRequestHeader('apikey', CFG.supabaseAnonKey);
+      x.setRequestHeader('x-upsert', 'false'); x.setRequestHeader('Content-Type', type); x.setRequestHeader('cache-control', 'max-age=3600');
+      x.upload.onprogress = e => { if (e.lengthComputable) onPct(Math.min(99, Math.round(e.loaded / e.total * 100))); };
+      x.onload = () => (x.status >= 200 && x.status < 300) ? res() : rej(new Error('Upload failed (' + x.status + ')'));
+      x.onerror = () => rej(new Error('network')); x.send(blob); });
+    const urls = await signUrls([path]);
+    return { path, kind: isImg ? 'image' : 'pdf', name: isImg ? (fd.name || 'Photo.jpg') : fd.pdf, url: urls[path] || '' };
+  })();
+}
+function startUpload(p){
+  p.up = { st:'uploading', pct:0, size: p.size || 0 };
+  if (!LIVE) { const t = setInterval(() => { p.up.pct = Math.min(100, p.up.pct + 17); if (p.up.pct >= 100) { clearInterval(t); p.up.st = 'done'; rerenderDraft(); } else updUp(p); }, 160); return; }
+  uploadXhr(p, pct => { p.up.pct = pct; updUp(p); }).then(r => { Object.assign(p, { path:r.path, kind:r.kind, name:r.name, url:r.url }); p.up.st = 'done'; p.up.pct = 100; rerenderDraft(); },
+    () => { p.up.st = 'failed'; p.up.err = navigator.onLine === false ? 'Upload failed. No connection.' : 'Upload failed. Try again.'; rerenderDraft(); });
+}
+function updUp(p){ const i = U.draft ? U.draft.pages.indexOf(p) : -1; const el = i >= 0 && document.querySelector(`[data-up="${i}"]`); if (!el) return;
+  const b = el.querySelector('.prog i'), t = el.querySelector('.upct'); if (b) b.style.width = p.up.pct + '%'; if (t) t.textContent = `Uploading · ${p.up.pct}%`; }
+function rerenderDraft(){ if (!document.querySelector('form[data-form="visit"]')) return; snapshotForm(); render(); restoreForm(); }
 function client(){ if (!sb) sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:'implicit' } }); return sb; }
 const API = {
   async boot(){
@@ -183,7 +212,7 @@ const API = {
     const { data } = await sb.auth.getSession();
     if (fromLink) { CUR = ''; STACK.length = 0; STACK.push(''); try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {} }
     if (linkErr) U.toast = linkErr.replace(/\+/g, ' ').replace(/\.?$/, '.') + ' Ask for a new code.';
-    if (data && data.session) { USER = data.session.user; S.email = USER.email; S.signedIn = true; try { await API.loadAll(); } catch(e) { U.toast = 'Could not load your records. ' + friendly(e); } }
+    if (data && data.session) { USER = data.session.user; S.email = USER.email; S.signedIn = true; render(true); try { await API.loadAll(); } catch(e) { U.toast = 'Could not load your records. ' + friendly(e); } }
     S.loading = false;
     sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT' && S.signedIn) { S = emptyState(); S.loading = false; render(true); } });
   },
@@ -254,11 +283,21 @@ const API = {
     for (let i = 0; i < draftPages.length; i++) {
       const p = draftPages[i];
       if (p.id) { out.push(p); if (p.position !== i) await sb.from('visit_pages').update({ position:i }).eq('id', p.id); continue; }
-      const up = await upload(p);
+      const up = p.path ? { path:p.path, kind:p.kind, name:p.name, url:p.url } : await upload(p);
       const r = await must(sb.from('visit_pages').insert({ visit_id:v.id, path:up.path, kind:up.kind, name:up.name, position:i }).select().single());
       out.push(MAP.page(r, { [up.path]: up.url }));
     }
     v.pages = out;
+  },
+  async deleteVisit(v){
+    if (LIVE) {
+      const paths = (v.pages || []).map(p => p.path).filter(Boolean);
+      await must(sb.from('visits').delete().eq('id', v.id));
+      if (paths.length) await sb.storage.from('records').remove(paths);
+    }
+    S.visits = S.visits.filter(x => x.id !== v.id);
+    S.tests.forEach(t => { if (t.visit === v.id) t.visit = ''; });
+    S.meds.forEach(m => { if (m.visit === v.id) m.visit = ''; });
   },
   async saveVisit(id, data){
     const row = { profile_id:S.active, doctor_id:data.doc, date:data.date, time:data.time || null, chamber:data.chamber || null, reason:data.reason || null, cond:data.cond || null, cost:data.cost, follow:data.follow || null, said:data.said || null };
@@ -375,7 +414,7 @@ function render(scrollTop){
   const desk = mq.matches;
   let r = parse();
   if (r.name === 'shared' || r.name === 's') { draw(sharedView(r), scrollTop); return; }
-  if (S.loading) { draw(loadingView(), scrollTop); return; }
+  if (S.loading) { draw(S.signedIn && !desk ? skeletonView(r) : loadingView(), scrollTop); return; }
   if (!S.signedIn) {
     if (!AUTH.includes(r.name)) { r = { name: desk ? 'login' : 'welcome' }; setHash(r.name); }
     if (desk && r.name === 'welcome') r = { name:'login' };
@@ -390,7 +429,7 @@ function render(scrollTop){
 }
 function draw(html, scrollTop){
   const app = document.getElementById('app');
-  app.innerHTML = html + sheetHtml() + toastHtml();
+  app.innerHTML = html + sheetHtml() + dialogHtml() + toastHtml();
   if (scrollTop) window.scrollTo(0, 0);
   afterDraw();
 }
@@ -410,7 +449,7 @@ function deskShell(r, v){
       <nav class="nav">${NAV.concat(S.isAdmin ? [['admin','admin_panel_settings','Admin','Users and activity']] : []).map(([k,ic,t,s]) => `<a href="#${k}" class="${tab===k?'on':''}">${I(ic)}<span><b>${t}</b><small>${s}</small></span></a>`).join('')}</nav>
       <div class="foot">Signed in as<b>${esc(S.email)}</b></div>
     </aside>
-    <main class="dmain"><div class="dwrap">${v.desk || v.body}</div></main>
+    <main class="dmain"><div class="dwrap">${navigator.onLine === false ? banner('offline', 'wifi_off', "You're offline. Changes will sync when you're back.") : ''}${v.desk || v.body}</div></main>
   </div>${v.overlay || ''}`;
 }
 function mobShell(r, v){
@@ -418,7 +457,8 @@ function mobShell(r, v){
   const tab = TAB_OF[r.name] || 'home';
   const cls = ['mapp', top ? 'tabs' : '', v.stick ? 'stick' : '', r.name === 'home' ? 'mhome' : ''].join(' ');
   const head = v.noHead ? '' : mHead(v);
-  return `<div class="${cls}">${head}<div class="mpad mbody">${v.body}</div></div>
+  const off = navigator.onLine === false ? banner('offline', 'wifi_off', "You're offline. Changes will sync when you're back.") : '';
+  return `<div class="${cls}">${head}<div class="mpad mbody">${off}${v.body}</div></div>
     ${v.stick ? `<div class="mstick">${v.stick}</div>` : ''}
     ${top ? tabbar(tab) : ''}${v.overlay || ''}`;
 }
@@ -428,7 +468,7 @@ function mHead(v){
 }
 function tabbar(tab){
   const a = (k, ic, t) => `<a href="#${k}" class="${tab===k?'on':''}"${tab===k?' aria-current="page"':''}>${I(ic, tab===k?'fill':'')}${t}</a>`;
-  return `<nav class="tabbar" aria-label="Main">${a('home','home','Home')}${a('tests','science','Tests')}<button type="button" class="fab" data-act="fab" aria-label="Add">${I('add')}</button>${a('doctors','medical_services','Doctors')}${a('me','person','Me')}</nav>`;
+  return `<nav class="tabbar" aria-label="Main">${a('home','home','Home')}${a('tests','science','Tests')}<button type="button" class="fab" data-act="fab" aria-label="Add">${I('add')}</button>${a('doctors', tab === 'doctors' ? 'medical_services' : 'stethoscope','Doctors')}${a('me','account_box','Me')}</nav>`;
 }
 
 /* ================= Auth ================= */
@@ -663,9 +703,9 @@ function visitView(v, desk){
       <div class="btns2 donly" style="margin-top:13px"><button type="button" class="btn btn-teal" data-act="pick" data-kind="visit-photo" data-id="${v.id}">${I('photo_camera')}Take photo</button>
       <button type="button" class="btn btn-white" data-act="pick" data-kind="visit-file" data-id="${v.id}">${I('upload')}Upload file</button></div></section>`;
   if (desk) return { desk: `<header class="dhead"><div><p class="crumb"><a href="#doctors">Doctors</a> / <a href="#doctor-${d.id}">${esc(d.name)}</a></p><h1>Visit · ${dmy(v.date)}</h1></div>
-      <div class="acts"><a class="btn btn-white btn-md" href="#editvisit-${v.id}">${I('edit')}Edit</a></div></header>
+      <div class="acts"><button type="button" class="btn btn-white btn-md" data-act="askdelvisit" data-id="${v.id}">${I('delete')}Delete</button><a class="btn btn-white btn-md" href="#editvisit-${v.id}">${I('edit')}Edit</a></div></header>
       <div class="split-r"><div class="stack">${details}${said}${tst}</div><div class="stack">${pres}</div></div>` };
-  return { title:`Visit · ${dm(v.date)}`, sub: `${esc(d.name)} · ${esc(d.spec)}`, back:`doctor-${d.id}`, action:`<button type="button" class="icon-btn" data-act="visitmore" data-id="${v.id}" aria-label="Add pages or edit visit">${I('add')}</button>`,
+  return { title:`Visit · ${dm(v.date)}`, sub: `${esc(d.name)} · ${v.time ? t12(v.time) : esc(d.spec)}`, back:`doctor-${d.id}`, action:`<button type="button" class="icon-btn" data-act="visitmore" data-id="${v.id}" aria-label="Edit or delete visit">${I('add')}</button>`,
     body: `${pres}${said}${details}${tst}` };
 }
 function viewer(v){
@@ -694,6 +734,14 @@ function ensureDraft(v){
   U.newDoc = !U.draft.doc;
   return U.draft;
 }
+function upRow(p, i){
+  const u = p.up, st = u ? u.st : 'done', nm = esc(p.name || p.pdf || `Prescription page ${i + 1}.jpg`);
+  const sub = st === 'uploading' ? `<span class="prog"><i style="width:${u.pct}%"></i></span><span class="s upct">Uploading · ${u.pct}%</span>`
+    : st === 'failed' ? `<span class="s">${esc(u.err)}</span>` : `<span class="s">${u && u.size ? 'Uploaded · ' + fmtSize(u.size) : 'Saved'}</span>`;
+  const end = st === 'failed' ? `<button type="button" class="btn btn-text btn-sm" data-act="retryup" data-i="${i}">Retry</button><button type="button" class="ux" data-act="rmpage" data-i="${i}" aria-label="Remove ${nm}">${I('close')}</button>`
+    : st === 'done' ? `<button type="button" class="ux" data-act="rmpage" data-i="${i}" aria-label="Remove ${nm}">${I('close')}</button>` : '';
+  return `<div class="uprow ${st}" data-up="${i}"><span class="uthumb">${I(st === 'failed' ? 'error' : 'cloud_upload')}</span><span class="ub"><b>${nm}</b>${sub}</span>${end}</div>`;
+}
 function visitForm(v, desk){
   const D = ensureDraft(v), ds = docs(), d = doc(D.doc), err = U.formErr;
   const docChips = `<div class="chips${desk ? '' : ' scroll'}">${ds.map(x => `<button type="button" class="chip ${!U.newDoc && D.doc === x.id ? 'on' : ''}" data-act="pickdoc" data-id="${x.id}">${esc(x.name)}</button>`).join('')}
@@ -713,7 +761,7 @@ function visitForm(v, desk){
       ${condNames.length ? `<div class="chips">${condNames.map(c => `<button type="button" class="chip ${D.cond === c ? 'on' : ''}" data-act="pickcond" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}</div>
     <div class="field"><label for="f_said">What the doctor said</label><textarea class="input grow" id="f_said" name="said" rows="${desk ? 2 : 1}" placeholder="BP still high, reduce salt, back in 1 month">${esc(v?.said || '')}</textarea></div>
     <div class="field"><span class="label">Prescription</span>
-      ${D.pages.length ? `<div class="thumbs">${D.pages.map((p,i) => `<div class="thumb" style="${p.img ? `background-image:url('${p.img}')` : ''}">${p.img ? '' : p.pdf ? 'PDF' : 'Page ' + (i+1)}<button type="button" data-act="rmpage" data-i="${i}" aria-label="Remove page">${I('close')}</button></div>`).join('')}</div>` : ''}
+      ${D.pages.length ? `<div class="uplist">${D.pages.map(upRow).join('')}</div>` : ''}
       <div class="btns2"><button type="button" class="btn btn-teal" data-act="pick" data-kind="draft-photo">${I('photo_camera')}Take photo</button><button type="button" class="btn btn-white" data-act="pick" data-kind="draft-file">${I('upload')}Upload file</button></div></div>
     ${v ? '' : `<div class="field"><label for="f_test">Tests advised</label>
       ${desk ? `<div style="display:flex;gap:8px"><input class="input" id="f_test" placeholder="Test name, e.g. Lipid profile" data-enter="addtest"><button type="button" class="btn btn-white" data-act="addtest" style="flex:none">${I('add')}Add</button></div>`
@@ -722,14 +770,16 @@ function visitForm(v, desk){
     <div class="grid2"><div class="field"><label for="f_cost">Doctor&#39;s fee</label><div class="affix"><span class="pre">৳</span><input class="input" id="f_cost" name="cost" inputmode="numeric" placeholder="0" value="${v?.cost ?? ''}"></div></div>
       <div class="field"><label for="f_follow">Next follow-up</label><span class="ifield">${I('calendar_today')}<input class="input" type="date" id="f_follow" name="follow" value="${v?.follow || ''}"></span></div></div>`;
   const title = v ? 'Edit visit' : 'Add visit';
+  const upBusy = D.pages.some(p => p.up && p.up.st !== 'done');
+  const upHint = upBusy ? `<p class="uphint">You can save once uploads finish.</p>` : '';
   const crumb = d ? `<a href="#doctors">Doctors</a> / <a href="#doctor-${d.id}">${esc(d.name)}</a>` : `<a href="#doctors">Doctors</a>`;
   if (desk) return { desk: `<form data-form="visit" data-id="${v?.id || ''}" novalidate class="stack" style="gap:34px">
       <header class="dhead"><div><p class="crumb">${crumb}</p><h1>${title}</h1><p>Save what the doctor said and the prescription.</p></div>
-      <div class="acts"><button type="button" class="btn btn-white btn-md" data-act="back" data-fallback="${v ? 'visit-' + v.id : 'home'}">Cancel</button><button class="btn btn-primary btn-md" type="submit">Save visit</button></div></header>
+      <div class="acts"><button type="button" class="btn btn-white btn-md" data-act="back" data-fallback="${v ? 'visit-' + v.id : 'home'}">Cancel</button><button class="btn btn-primary btn-md" type="submit" ${upBusy ? 'disabled' : ''}>Save visit</button></div></header>
       <div class="card formcard form">${fields}</div></form>` };
   return { title, sub:'Save what the doctor said and the prescription.', back: v ? 'visit-' + v.id : 'home',
     body: `<form data-form="visit" id="visitForm" data-id="${v?.id || ''}" novalidate class="form">${fields}</form>`,
-    stick: `<button class="btn btn-primary btn-block" type="submit" form="visitForm">Save visit</button>` };
+    stick: `${upHint}<button class="btn btn-primary btn-block" type="submit" form="visitForm" ${upBusy ? 'disabled' : ''}>Save visit</button>` };
 }
 
 /* ---- Tests ---- */
@@ -793,10 +843,11 @@ function doctorForm(d, desk){
   if (U.chKey !== key) { U.chKey = key; U.chN = Math.max(1, d?.chambers?.length || 0); }
   const links = (d?.links || []).map(l => typeof l === 'string' ? { label:l } : l);
   const site = links.find(l => l.url && !l.note), notes = links.find(l => l.note != null);
-  const fld = (id, name, label, ph, val, opt) => `<div class="field"><label for="${id}">${label}${opt ? ' <span class="opt">(optional)</span>' : ''}</label><input class="input" id="${id}" name="${name}" placeholder="${ph}" value="${esc(val || '')}"></div>`;
+  const E = U.formErr, nErr = Object.keys(E).length;
+  const fld = (id, name, label, ph, val, opt) => `<div class="field"><label for="${id}">${label}${opt ? ' <span class="opt">(optional)</span>' : ''}</label><input class="input ${E[name] ? 'err' : ''}" id="${id}" name="${name}" placeholder="${ph}" value="${esc(val || '')}"${E[name] ? ` aria-invalid="true" aria-describedby="${id}_e"` : ''}>${E[name] ? `<span class="err-text" id="${id}_e">${esc(E[name])}</span>` : ''}</div>`;
   const chambers = Array.from({ length: U.chN }, (_, i) => { const c = d?.chambers?.[i] || {};
     return `<div class="chgroup">${secH('Chamber ' + (i + 1))}${fld('ch_' + i, 'ch_' + i, 'Chamber name', 'e.g. Square Hospital', c.name)}${fld('ph_' + i, 'ph_' + i, 'Phone', 'Chamber phone', c.phone)}${fld('in_' + i, 'in_' + i, 'Days and time', 'e.g. Sat–Wed, 6–8 PM', c.info)}</div>`; }).join('');
-  const f = `<div class="fgroup"><div class="field"><label for="d_name">Name</label><input class="input ${U.formErr.name ? 'err' : ''}" id="d_name" name="name" placeholder="Dr. full name" value="${esc(d?.name || '')}">${U.formErr.name ? `<span class="err-text">${esc(U.formErr.name)}</span>` : ''}</div>
+  const f = `${nErr ? banner('error', 'error', `Fix ${plural(nErr, 'field')} to save this doctor.`) : ''}<div class="fgroup"><div class="field"><label for="d_name">Name</label><input class="input ${U.formErr.name ? 'err' : ''}" id="d_name" name="name" placeholder="Dr. full name" value="${esc(d?.name || '')}">${U.formErr.name ? `<span class="err-text">${esc(U.formErr.name)}</span>` : ''}</div>
     ${fld('d_spec', 'spec', 'Specialty', 'e.g. Cardiologist', d?.spec)}</div>
     <div class="fgroup chambers">${chambers}<button type="button" class="btn btn-white btn-block" data-act="addchamber">Add another chamber</button></div>
     <div class="fgroup tight">${fld('d_url', 'url', 'Website or link', 'https://', site?.url, true)}${fld('d_notes', 'notes', 'Notes', 'Anything worth remembering', notes?.note, true)}</div>`;
@@ -1031,35 +1082,56 @@ function sharedView(r){
     <p class="hint" style="text-align:center">Shared via Docly${S.signedIn ? ` · <a class="link" href="#share">Back to the app</a>` : ''}</p></div></div>`;
 }
 function shareUrl(token){ return location.href.split('#')[0] + (LIVE ? '#s-' + token : '#shared'); }
+function skeletonView(r){
+  const tab = TAB_OF[r.name] || 'home', titles = { home:'Home', tests:'Tests', doctors:'Doctors', me:'Me' };
+  const sk = `<div class="row skel" aria-hidden="true"><span class="sk-t"></span><span class="sk-l"><i></i><i></i></span></div>`;
+  return mobShell({ name: tab }, { title: titles[tab], sub:'', body:`<div class="card list compact skel-card" role="status" aria-label="Loading your records">${sk.repeat(4)}</div>` });
+}
 function loadingView(){ return `<div style="min-height:100vh;display:grid;place-items:center"><div style="display:flex;flex-direction:column;align-items:center;gap:13px">${logo()}<span class="hint">Loading your records…</span></div></div>`; }
 function fmtWhen(ts){ const d = new Date(ts); return `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}, ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`; }
 
 /* ---- First sign-in: create your own profile ---- */
 function setupView(desk){
-  const body = `<form data-form="setup" class="form" novalidate>
-      <div class="field"><label for="su_name">Your name</label><input class="input ${U.formErr.name ? 'err' : ''}" id="su_name" name="name" autocomplete="name" placeholder="Full name">${U.formErr.name ? `<span class="err-text">${esc(U.formErr.name)}</span>` : ''}</div>
-      <div class="grid2"><div class="field"><label for="su_dob">Date of birth <span class="opt">(optional)</span></label><input class="input" type="date" id="su_dob" name="dob"></div>
-      <div class="field"><label for="su_blood">Blood group <span class="opt">(optional)</span></label><select class="input" id="su_blood" name="blood"><option value="">Select</option>${['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(b => `<option>${b}</option>`).join('')}</select></div></div>
-      <button class="btn btn-primary btn-block" type="submit">${U.busy ? 'Saving…' : 'Continue'}${I('arrow_forward')}</button></form>`;
-  return `<div class="auth-m"><div class="grow">${logo()}<div style="display:flex;flex-direction:column;gap:8px"><h1>Let's set up your records.</h1><p class="lead">Start with your own profile. You can add family members later.</p></div>${body}</div></div>`;
+  const E = U.formErr, B = [['A+','A+'],['A-','A−'],['B+','B+'],['B-','B−'],['O+','O+'],['O-','O−'],['AB+','AB+'],['AB-','AB−']];
+  const fields = `<div class="field"><label for="su_name">Full name</label><input class="input ${E.name ? 'err' : ''}" id="su_name" name="name" autocomplete="name" placeholder="e.g. Rafi Ahmed">${E.name ? `<span class="err-text">${esc(E.name)}</span>` : ''}</div>
+      <div class="field"><label for="su_dob">Date of birth</label><span class="ifield">${I('calendar_today')}<input class="input" type="date" id="su_dob" name="dob" max="${iso(new Date())}"></span></div>
+      <div class="field"><span class="label" id="su_bl">Blood group (optional)</span><input type="hidden" name="blood" value=""><div class="chips wrap" role="group" aria-labelledby="su_bl">${B.map(([v, l]) => `<button type="button" class="chip" data-act="pickblood" data-b="${v}" aria-pressed="false">${l}</button>`).join('')}</div></div>
+      ${banner('info', 'lock', 'Your records are private. Only you, and doctors you share a link with, can see them.')}
+      <label class="consent"><input type="checkbox" name="agree" ${E.agree ? 'aria-invalid="true"' : ''}><span class="cbox">${I('check')}</span><span>I agree to the <b>Privacy policy</b> and <b>Terms of use</b>, and to Docly storing my health records.${E.agree ? `<span class="err-text" style="display:block;margin-top:5px">${esc(E.agree)}</span>` : ''}</span></label>`;
+  const btn = `<button class="btn btn-primary btn-block" type="submit" form="setupForm">${U.busy ? 'Saving…' : 'Continue'}</button>`;
+  const form = `<form data-form="setup" id="setupForm" class="form setup" novalidate>${fields}</form>`;
+  if (desk) return `<div class="auth-m"><div class="grow">${logo()}<div style="display:flex;flex-direction:column;gap:12px"><h1>Set up your profile</h1><p class="lead">Whose records are these? You can add family later.</p></div>${form}${btn}</div></div>`;
+  return mobShell({ name:'setup' }, { title:'Set up your profile', sub:'Whose records are these? You can add family later.', body: form, stick: btn });
 }
 
 /* ================= Sheet & toast ================= */
 function sheetHtml(){
   const s = U.sheet; if (!s) return '';
   return `<div class="scrim" data-act="closesheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(s.title)}" data-act="noop"><div class="grab"></div>
-    <h3>${esc(s.title)}</h3>${s.sub ? `<p class="sub">${esc(s.sub)}</p>` : ''}<div class="list div">${s.items.map(it => row({ lead: it.lead || tile(it.icon), t: esc(it.label), s: it.sub ? esc(it.sub) : '', end: it.end || chev(), act: it.act, attrs: it.attrs || '' })).join('')}</div></div></div>`;
+    <h3>${esc(s.title)}</h3>${s.sub ? `<p class="sub">${esc(s.sub)}</p>` : ''}<div class="list div">${s.items.map(it => row({ lead: it.lead || tile(it.icon), t: it.html || esc(it.label), s: it.sub ? esc(it.sub) : '', end: it.end || chev(), act: it.act, attrs: it.attrs || '' })).join('')}</div></div></div>`;
 }
 let toastTimer;
 function toastHtml(){ return U.toast ? `<div class="toast" role="status">${I('check_circle','fill')}${esc(U.toast)}</div>` : ''; }
 function toast(msg){ U.toast = msg; clearTimeout(toastTimer); render(); toastTimer = setTimeout(() => { U.toast = null; const t = document.querySelector('.toast'); if (t) t.remove(); }, 2600); }
 function openSheet(s){ U.sheet = s; render(); }
+function openDialog(d){ U.dialog = d; render(); setTimeout(() => document.querySelector('.dlg .btn')?.focus(), 0); }
+function dialogHtml(){
+  const d = U.dialog; if (!d) return '';
+  return `<div class="scrim center dlg-scrim" data-act="dlgcancel"><div class="dlg ${d.tone}" role="alertdialog" aria-modal="true" aria-labelledby="dlgT" aria-describedby="dlgB" data-act="noop">
+    <span class="dlg-ic">${I(d.icon)}</span><h3 id="dlgT">${esc(d.title)}</h3><p id="dlgB">${esc(d.body)}</p>
+    <div class="dlg-acts"><button type="button" class="btn btn-block ${d.tone === 'danger' ? 'btn-red' : 'btn-primary'}" data-act="${d.act}" ${d.attrs || ''}>${U.busy ? 'Working…' : esc(d.ok)}</button><button type="button" class="btn btn-block btn-white" data-act="dlgcancel">${esc(d.cancel)}</button></div></div></div>`;
+}
 function closeSheet(){ U.sheet = null; render(); }
 function log(icon, text, href){ API.log(icon, text, href); }
 
 /* ================= Files ================= */
 let pickCtx = null;
-function pick(kind, id, el){
+function pick(kind, id, el, asked){
+  const photo0 = /photo|snap/.test(kind), perm = photo0 ? 'camera' : 'files';
+  let ok = true; try { ok = !!localStorage.getItem('docly-perm-' + perm); } catch(e) {}
+  if (!asked && !ok && !mq.matches) { U.pendingPick = { kind, id }; U.sheet = null;
+    openDialog(photo0 ? { tone:'brand', icon:'lock', title:'Allow camera?', body:'Docly uses the camera only when you snap a prescription or report. Photos stay in your records.', ok:'Allow', act:'permok', attrs:'data-perm="camera"', cancel:'Not now' }
+      : { tone:'brand', icon:'lock', title:'Allow access to files?', body:'Pick a PDF or photo of a report from your phone. Docly only opens the file you choose.', ok:'Allow', act:'permok', attrs:'data-perm="files"', cancel:'Not now' }); return; }
   const f = document.getElementById('fileIn');
   pickCtx = { kind, id };
   const photo = /photo|snap/.test(kind);
@@ -1082,7 +1154,7 @@ document.getElementById('fileIn').addEventListener('change', async e => {
   const file = e.target.files[0]; if (!file || !pickCtx) return;
   const data = await readImage(file); const { kind, id } = pickCtx; pickCtx = null;
   if (kind.startsWith('visit')) { const v = visit(id); toast('Uploading…'); busy(async () => { await API.savePages(v, [...(v.pages || []), data]); log('photo_camera', `Added prescription page · ${doc(v.doc).name}`, 'visit-' + v.id); save(); toast('Page added to prescription'); }); }
-  else if (kind.startsWith('draft')) { snapshotForm(); U.draft.pages.push(data); render(); restoreForm(); }
+  else if (kind.startsWith('draft')) { snapshotForm(); data.size = data.img ? Math.round(data.img.length * .75) : file.size; if (!data.name) data.name = data.pdf || file.name; U.draft.pages.push(data); startUpload(data); render(); restoreForm(); }
   else if (kind.startsWith('test')) { attachReport(id, data); }
   else if (kind === 'snap') { U.snapData = data; const pt = pendingTests();
     openSheet({ title:'Attach this report to', sub:'Pick the test it belongs to.', items: [...pt.map(t => ({ icon:'science', label:t.name, sub:`${doc(t.doc)?.name || ''} · ${testStatus(t).label}`, act:'snapto', attrs:`data-id="${t.id}"` })),
@@ -1093,6 +1165,12 @@ function attachReport(id, data){
   return busy(async () => { await API.attachReport(t, data); log('photo_camera', `Attached report to ${t.name}`, 'test-' + t.id); save(); toast(`Report attached to ${t.name}`); });
 }
 
+/* Re-render a simple form and keep what was typed */
+function rerenderKeep(sel){
+  const snap = {}; document.querySelector(sel)?.querySelectorAll('input[name],select[name],textarea[name]').forEach(i => { snap[i.name] = i.type === 'checkbox' ? i.checked : i.value; });
+  render(); const g = document.querySelector(sel); if (!g) return;
+  Object.entries(snap).forEach(([k, v]) => { const el = g.querySelector(`[name="${k}"]`); if (!el) return; if (el.type === 'checkbox') el.checked = v; else el.value = v; });
+}
 /* Keep typed values across re-renders of the visit form */
 function snapshotForm(){
   const f = document.querySelector('form[data-form="visit"]'); if (!f) return;
@@ -1118,11 +1196,11 @@ const ACTS = {
   nudgeoff(){ U.nudgeOff = true; try { localStorage.setItem(NUDGEKEY, LIVE && USER ? USER.id : 'demo'); } catch(e) {} render(); },
   mode(el, e){ e.preventDefault(); U.authMode = U.authMode === 'signin' ? 'signup' : 'signin'; render(); },
   resend(el, e){ e.preventDefault(); API.sendCode(S.email).then(() => { U.resendAt = Date.now() + 60000; U.otpErr = ''; U.expired = false; U.tries = 3; toast('New code sent'); }, err => { U.otpErr = friendly(err); render(); }); },
-  fab(){ openSheet({ title:'Add a record', items:[
-    { icon:'note_add', label:'Add visit', sub:'Doctor, prescription and advice', act:'go', attrs:'data-href="add-visit"' },
-    { icon:'photo_camera', label:'Snap report', sub:'Photo of a test report', act:'snap' },
-    { icon:'science', label:'Add test', sub:'A test a doctor advised', act:'go', attrs:'data-href="add-test"' },
-    { icon:'medication', label:'Add medication', sub:'What you take and who prescribed it', act:'go', attrs:'data-href="add-med"' } ] }); },
+  fab(){ openSheet({ title:'Add to records', items:[
+    { icon:'note_add', label:'Visit', sub:'Doctor, date, notes and prescription', act:'go', attrs:'data-href="add-visit"' },
+    { icon:'science', label:'Test', sub:'Advised or done, with its report', act:'go', attrs:'data-href="add-test"' },
+    { icon:'medication', label:'Medication', sub:'What you take and who prescribed it', act:'go', attrs:'data-href="add-med"' },
+    { icon:'medical_services', label:'Doctor', sub:'Name, specialty and chambers', act:'go', attrs:'data-href="add-doctor"' } ] }); },
   closesheet(el, e){ if (e.target === el) closeSheet(); },
   switch(){ openSheet({ title:'Switch profile', sub:'The whole app switches to that person.', items:[
     ...S.profiles.map(p => ({ lead: av(p.name, p.tone, 'sm'), label: `${p.short} (${p.rel})`, end: p.id === S.active ? pill('Active','teal') : chev(), act:'useprofile', attrs:`data-id="${p.id}"` })),
@@ -1147,10 +1225,18 @@ const ACTS = {
     const strip = o => JSON.parse(JSON.stringify(o, (k, v) => (k === 'img' && typeof v === 'string' && v.startsWith('data:')) ? '[image]' : (k === 'file' ? undefined : v)));
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(strip(data), null, 2)], { type:'application/json' }));
     a.download = `docly-export-${iso(new Date())}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Export downloaded'); },
-  visitmore(el){ const id = el.dataset.id; openSheet({ title:'Visit', items:[
-    { icon:'photo_camera', label:'Take photo', sub:'Add a prescription page', act:'pick', attrs:`data-kind="visit-photo" data-id="${id}"` },
-    { icon:'upload', label:'Upload file', sub:'Photo or PDF', act:'pick', attrs:`data-kind="visit-file" data-id="${id}"` },
-    { icon:'edit', label:'Edit visit', sub:'Doctor, date, notes and fee', act:'go', attrs:`data-href="editvisit-${id}"` } ] }); },
+  visitmore(el){ const id = el.dataset.id; openSheet({ title:`Visit · ${dm(visit(id).date)}`, items:[
+    { icon:'edit', label:'Edit', sub:'Change details, notes or photos', act:'go', attrs:`data-href="editvisit-${id}"` },
+    { lead:`<span class="tile">${I('delete', 'red')}</span>`, html:'<span class="red">Delete</span>', label:'Delete', sub:'Removes it with its photos and notes', act:'askdelvisit', attrs:`data-id="${id}"` } ] }); },
+  askdelvisit(el){ const v = visit(el.dataset.id); U.sheet = null; openDialog({ tone:'danger', icon:'delete', title:'Delete this visit?',
+    body:`The prescription photos and notes from ${dm(v.date)} will be removed. This can't be undone.`, ok:'Delete', act:'delvisit', attrs:`data-id="${v.id}"`, cancel:'Cancel' }); },
+  delvisit(el){ const v = visit(el.dataset.id); const d = doc(v.doc); U.dialog = null;
+    busy(async () => { await API.deleteVisit(v); log('delete', `Deleted visit · ${d ? d.name : ''} · ${dm(v.date)}`, d ? 'doctor-' + d.id : 'doctors'); save(); setHash(d ? 'doctor-' + d.id : 'doctors'); render(true); toast('Visit deleted'); }); },
+  dlgcancel(el, e){ if (e && el.classList.contains('scrim') && e.target !== el) return; U.dialog = null; render(); },
+  permok(el){ const k = el.dataset.perm; try { localStorage.setItem('docly-perm-' + k, '1'); } catch(e) {} const p = U.pendingPick; U.dialog = null; U.pendingPick = null; render(); if (p) pick(p.kind, p.id, null, true); },
+  retryup(el){ const p = U.draft && U.draft.pages[Number(el.dataset.i)]; if (p) { startUpload(p); rerenderDraft(); } },
+  pickblood(el){ const f = document.querySelector('form[data-form="setup"]'); const h = f.querySelector('[name="blood"]'); h.value = h.value === el.dataset.b ? '' : el.dataset.b;
+    f.querySelectorAll('[data-act="pickblood"]').forEach(b => { const on = b.dataset.b === h.value; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); },
   page(el){ U.viewerPage = Number(el.dataset.i) || 0; },
   vpage(el){ const v = visit(parse().id); const n = (v.pages||[]).length; U.viewerPage = (U.viewerPage + Number(el.dataset.d) + n) % n; render(); },
   addvisit(el, e){ e.preventDefault(); U.sheet = null; U.draft = null; U.pendingDoc = el.dataset.doc; go('add-visit'); },
@@ -1159,7 +1245,7 @@ const ACTS = {
   pickcond(el){ snapshotForm(); U.draft.cond = U.draft.cond === el.dataset.c ? '' : el.dataset.c; render(); restoreForm(); },
   addtest(){ const i = document.getElementById('f_test'); const v = i.value.trim(); if (!v) { i.focus(); return; } snapshotForm(); U.draft.tests.push(v); render(); restoreForm(); setTimeout(() => document.getElementById('f_test')?.focus(), 0); },
   rmtest(el){ snapshotForm(); U.draft.tests.splice(Number(el.dataset.i), 1); render(); restoreForm(); },
-  rmpage(el){ snapshotForm(); U.draft.pages.splice(Number(el.dataset.i), 1); render(); restoreForm(); },
+  rmpage(el){ snapshotForm(); const [p] = U.draft.pages.splice(Number(el.dataset.i), 1); if (LIVE && p && p.path && !p.id) sb.storage.from('records').remove([p.path]); render(); restoreForm(); },
   tfilter(el){ U.testFilter = el.dataset.f; render(); },
   mfilter(el){ U.medFilter = el.dataset.f; render(); },
   markdone(el){ U.sheet = null; const t = test(el.dataset.id); busy(async () => { await API.updateTest(t, { status:'done', date: iso(LIVE ? new Date() : TODAY) }); log('science', `${t.name} set to Done`, 'test-' + t.id); save(); toast(`${t.name} marked as done`); }); },
@@ -1203,7 +1289,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.matches('tr[data-act]')) e.target.click();
   if (e.key === 'Enter' && e.target.matches('input') && !e.target.dataset.enter && e.target.dataset.otp == null && e.target.form && e.target.form.dataset.form) { e.preventDefault(); FORMS[e.target.form.dataset.form](e.target.form); return; }
   if (e.key === 'Enter' && e.target.dataset.enter === 'addtest') { e.preventDefault(); ACTS.addtest(); }
-  if (e.key === 'Escape') { if (U.sheet) closeSheet(); else if (parse().name === 'photo' || parse().name === 'code') ACTS.back({ dataset:{ fallback: parse().name === 'code' ? 'login' : 'visit-' + parse().id } }); }
+  if (e.key === 'Escape') { if (U.dialog) { U.dialog = null; U.pendingPick = null; render(); } else if (U.sheet) closeSheet(); else if (parse().name === 'photo' || parse().name === 'code') ACTS.back({ dataset:{ fallback: parse().name === 'code' ? 'login' : 'visit-' + parse().id } }); }
 });
 document.addEventListener('input', e => {
   const t = e.target;
@@ -1274,6 +1360,7 @@ const FORMS = {
   code(f){ const code = [...f.querySelectorAll('[data-otp]')].map(i => i.value).join(''); if (code.length < 6) { U.otpErr = 'Enter all 6 digits.'; render(); return; } submitCode(code); },
   visit(f){
     snapshotForm(); const D = U.draft, val = n => (f.querySelector(`[name="${n}"]`) || {}).value || '';
+    if (D.pages.some(p => p.up && p.up.st !== 'done')) { toast('You can save once uploads finish.'); restoreForm(); return; }
     U.formErr = {};
     if (U.newDoc && !(U.ndName || '').trim()) { U.formErr.doc = "Add the doctor's name, or pick a doctor."; render(); restoreForm(); return; }
     if (!U.newDoc && !D.doc) { U.formErr.doc = 'Pick a doctor.'; render(); restoreForm(); return; }
@@ -1301,7 +1388,10 @@ const FORMS = {
   test(f){ const fd = new FormData(f), name = (fd.get('name') || '').trim(); if (!name) { U.formErr = { name:'Add the test name.' }; render(); return; } U.formErr = {};
     busy(async () => { const t = await API.createTest({ name, doc: fd.get('doc'), status: fd.get('status'), date: fd.get('date') || iso(LIVE ? new Date() : TODAY), venue: (fd.get('venue')||'').trim() });
       log('science', `Added test · ${name}`, 'test-' + t.id); save(); setHash('test-' + t.id); render(true); toast('Test saved'); }); },
-  doctor(f){ const fd = new FormData(f), name = (fd.get('name') || '').trim(); if (!name) { U.formErr = { name:"Add the doctor's name." }; render(); return; } U.formErr = {};
+  doctor(f){ const fd = new FormData(f), name = (fd.get('name') || '').trim(), err = {};
+    if (!name) err.name = "Add the doctor's name.";
+    for (let i = 0; i < (U.chN || 1); i++) { const ph = (fd.get('ph_' + i) || '').trim(); if (ph && ph.replace(/\D/g, '').length < 10) err['ph_' + i] = 'Enter a full phone number, e.g. +880 1711 234567.'; }
+    U.formErr = err; if (Object.keys(err).length) { rerenderKeep('form[data-form="doctor"]'); document.querySelector('form[data-form="doctor"] .input.err')?.focus(); return; } U.formErr = {};
     const spec = (fd.get('spec') || '').trim(), url = (fd.get('url') || '').trim(), note = (fd.get('notes') || '').trim();
     const chambers = Array.from({ length: U.chN || 1 }, (_, i) => ({ name: (fd.get('ch_' + i) || '').trim(), phone: (fd.get('ph_' + i) || '').trim(), info: (fd.get('in_' + i) || '').trim() }))
       .filter(c => c.name).map(c => c.phone ? c : { name: c.name, info: c.info });
@@ -1328,12 +1418,20 @@ const FORMS = {
   profile(f){ const fd = new FormData(f), name = (fd.get('name') || '').trim(); if (!name) { U.formErr = { name:'Add a name.' }; render(); return; } U.formErr = {};
     busy(async () => { const p = await API.createProfile({ name, rel: (fd.get('rel') || '').trim().toLowerCase() || 'family', blood: fd.get('blood') || '', dob: fd.get('dob') || '' });
       S.active = p.id; log('group', `Added profile ${p.short} (${p.rel})`, 'profiles'); save(); setHash('home'); render(true); toast(`Now viewing ${p.short}. Add their first visit.`); }); },
-  setup(f){ const fd = new FormData(f), name = (fd.get('name') || '').trim(); if (!name) { U.formErr = { name:'Add your name to continue.' }; render(); return; } U.formErr = {};
+  setup(f){ const fd = new FormData(f), name = (fd.get('name') || '').trim(), err = {};
+    if (!name) err.name = 'Add your name to continue.'; if (!fd.get('agree')) err.agree = 'Tick the box to continue.';
+    U.formErr = err; if (Object.keys(err).length) { const b = fd.get('blood'); rerenderKeep('form[data-form="setup"]'); if (b) document.querySelector(`[data-act="pickblood"][data-b="${b}"]`)?.click(); return; } U.formErr = {};
     busy(async () => { const p = await API.createProfile({ name, rel:'you', blood: fd.get('blood') || '', dob: fd.get('dob') || '' }); S.active = p.id; save(); setHash('home'); render(true); toast(`Welcome, ${p.short}. Add your first visit.`); }); },
   adminopen(f){ const fd = new FormData(f), reason = (fd.get('reason') || '').trim(), user = f.dataset.user;
     if (!reason) { U.formErr = { reason:'Write why you need to open these records. The user can see this.' }; render(); return; } U.formErr = {};
     busy(async () => { const rec = await API.adminRecords(user, reason); U.adminRec[user] = { reason, rec }; render(); }); },
 };
+function syncOffline(){
+  document.querySelectorAll('.banner.offline').forEach(b => b.remove());
+  if (navigator.onLine !== false) return;
+  const host = document.querySelector('.mbody, .dwrap'); if (host) host.insertAdjacentHTML('afterbegin', banner('offline', 'wifi_off', "You're offline. Changes will sync when you're back."));
+}
+window.addEventListener('online', syncOffline); window.addEventListener('offline', syncOffline);
 document.addEventListener('submit', e => { const f = e.target.closest('form[data-form]'); if (!f) return; e.preventDefault(); FORMS[f.dataset.form](f); });
 
 /* Resend countdown */
@@ -1359,7 +1457,7 @@ function onRoute(){
   if (STACK.length > 50) STACK.shift();
   const n = parse().name;
   if (n !== 'add-visit' && n !== 'editvisit') { U.draft = null; U.newDoc = false; }
-  U.formErr = {}; U.sheet = null; U.confirmDelete = false; U.revoke = null; U.confirmAdminDelete = null;
+  U.formErr = {}; U.sheet = null; U.dialog = null; U.confirmDelete = false; U.revoke = null; U.confirmAdminDelete = null;
   if (n !== 'share') U.newLink = null;
   if (n !== 'photo') U.viewerPage = U.viewerPage;
   render(n !== 'photo');

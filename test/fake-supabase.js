@@ -52,6 +52,17 @@
     admin_delete_user: ({ p_user }) => { Object.keys(DB.tables).forEach(k => { DB.tables[k] = DB.tables[k].filter(r => r.owner !== p_user && r.id !== p_user && r.user_id !== p_user); }); return null; },
   };
   const listeners = [];
+  // XHR uploads to storage (the app uses XHR for progress)
+  const RX = window.XMLHttpRequest;
+  window.XMLHttpRequest = function(){ const x = new RX(); let fake = null; const up = { onprogress:null };
+    const w = { upload: up, status:0, responseText:'', onload:null, onerror:null,
+      open(m, u){ const k = /fake\.supabase\.co\/storage\/v1\/object\/records\/(.+)$/.exec(u); if (k) fake = decodeURIComponent(k[1]); else x.open(m, u); },
+      setRequestHeader(a, b){ if (!fake) x.setRequestHeader(a, b); },
+      send(body){ if (!fake) { x.onload = () => { w.status = x.status; w.responseText = x.responseText; w.onload && w.onload(); }; x.onerror = () => w.onerror && w.onerror(); x.send(body); return; }
+        if (window.__failUpload) { setTimeout(() => w.onerror && w.onerror(), 50); return; }
+        if (!fake.startsWith(uidNow() + '/')) { setTimeout(() => { w.status = 403; w.onload && w.onload(); }, 30); return; }
+        let n = 0; const t = setInterval(() => { n += 25; up.onprogress && up.onprogress({ lengthComputable:true, loaded:n, total:100 }); if (n >= 100) { clearInterval(t); DB.files[fake] = { size: (body && body.size) || 1 }; persist(); w.status = 200; w.onload && w.onload(); } }, 40); } };
+    return w; };
   window.supabase = { createClient(url, key){
     if (!url || !key) throw new Error('missing config');
     return {
