@@ -623,6 +623,19 @@ textarea.input{border-radius:21px}
 .auth-m.welcome .atext{max-width:308px}
 .auth-m.welcome h1{font-size:32px;line-height:46px;letter-spacing:-.64px}
 .auth-m.welcome h1 span{color:#4BA6CC}
+/* Bottom nav · floating soft bar (Tamim reference, 2026-11-22) */
+.tabbar{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));border-radius:34px;background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  box-shadow:0 1px 2px rgba(15,42,74,.04), 0 12px 32px rgba(15,42,74,.10), inset 0 1px 0 rgba(255,255,255,.9);padding:14px 8px 16px;gap:0;align-items:center}
+.tabbar a{gap:6px;font-size:12px;line-height:16px;font-weight:500;color:#8A909B;padding:4px 0}
+.tabbar a .mi{font-size:24px;color:#8A909B;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24}
+.tabbar a.on{color:var(--ink);font-weight:700}
+.tabbar a.on .mi{color:var(--ink);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24}
+.fab{width:58px;height:58px;border-radius:50%;margin:0;color:var(--ink);background:linear-gradient(180deg,#FFFFFF 0%,#F4F6F8 100%);
+  box-shadow:0 1px 2px rgba(15,42,74,.06), 0 10px 24px rgba(15,42,74,.14), inset 0 1px 0 #fff, inset 0 -2px 4px rgba(15,42,74,.04)}
+.fab .mi{font-size:30px;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24}
+.fab:hover{box-shadow:0 1px 2px rgba(15,42,74,.06), 0 14px 30px rgba(15,42,74,.18), inset 0 1px 0 #fff}
+.fab:active{transform:scale(.96)}
+.mapp.tabs{padding-bottom:calc(128px + env(safe-area-inset-bottom,0px))}
 </style>
 
 

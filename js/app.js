@@ -427,7 +427,7 @@ function mHead(v){
   return `<header class="mpad mhead ${v.back == null ? 'top' : ''}"><div class="hrow">${back}<div class="body"><h1>${v.title}</h1>${v.sub ? `<p>${v.sub}</p>` : ''}</div>${v.action || ''}</div></header>`;
 }
 function tabbar(tab){
-  const a = (k, ic, t) => `<a href="#${k}" class="${tab===k?'on':''}">${I(ic)}${t}</a>`;
+  const a = (k, ic, t) => `<a href="#${k}" class="${tab===k?'on':''}"${tab===k?' aria-current="page"':''}>${I(ic, tab===k?'fill':'')}${t}</a>`;
   return `<nav class="tabbar" aria-label="Main">${a('home','home','Home')}${a('tests','science','Tests')}<button type="button" class="fab" data-act="fab" aria-label="Add">${I('add')}</button>${a('doctors','medical_services','Doctors')}${a('me','person','Me')}</nav>`;
 }
 
