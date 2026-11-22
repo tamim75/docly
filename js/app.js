@@ -565,17 +565,22 @@ function homeMob(){
   const p = prof(), vs = visits(), fu = followUps(), pt = pendingTests();
   const n = recordCount();
   const recent = vs.filter(v => days(v.date) >= -30);
-  const rPres = recent.filter(v => (v.pages||[]).length).length;
-  const rRep = tests().filter(t => t.report && days(t.date) >= -30).length;
-  const monthTxt = recent.length || rRep ? `<span class="hl">${plural(recent.length,'visit')}</span> · ${plural(rPres,'prescription')} · ${plural(rRep,'report')}` : 'Nothing added yet';
-  const top = `<div class="mh-top">${av(p.name, p.tone)}<button type="button" class="who" data-act="switch"><small>${greeting()}</small><b>${esc(p.name)}${I('expand_more')}</b></button>
-      <a class="bell" href="#activity" aria-label="Activity">${I('notifications')}</a></div>`;
-  const hero = `<section class="glass"><a href="#history" class="glass-head"><div><h2 class="num">${plural(n,'health record')}</h2><p class="s">${vs.length ? 'Last added ' + lastAdded() : 'Add your first visit to start'}</p></div>${I('chevron_right')}</a>
-      <div class="btns2"><a class="btn btn-glass" href="#add-visit">${I('note_add')}Add visit</a><button type="button" class="btn btn-glass" data-act="snap">${I('post_add')}Snap report</button></div></section>`;
-  const month = `<section class="glass" style="padding:21px"><h3 style="font-size:16px;font-weight:600">This month</h3><p class="s" style="margin-top:5px">${monthTxt}</p></section>`;
-  const ql = `<section class="card qlinks"><a href="#tests">${tile('science')}Tests</a><a href="#doctors">${tile('medical_services')}Doctors</a><a href="#profiles">${tile('group')}Profiles</a></section>`;
+  const newCount = recent.length + recent.reduce((k,v) => k + (v.pages||[]).length, 0) + tests().filter(t => t.report && days(t.date) >= -30).length;
+  const first = esc(p.short || (p.name || '').split(' ')[0] || 'there');
+  const top = `<div class="h2-top"><button type="button" class="who" data-act="switch">${av(p.name, p.tone)}<b>${esc(p.name)}${I('expand_more')}</b></button>
+      <a class="h2-bell" href="#activity" aria-label="Activity">${I('notifications')}</a></div>`;
+  const greet = `<h1 class="h2-greet"><span>Hi ${first},</span><br>all your records,<br>in one place.</h1>`;
+  const ds = docs().slice(0, 3);
+  const hero = `<section class="rcard"><div class="rhero">
+      <div class="rtop"><div><small>Health records</small><b>${esc(p.name)}${p.blood ? ' · ' + esc(p.blood) : ''}</b></div><a class="ropen" href="#history" aria-label="Open medical history">${I('chevron_right')}</a></div>
+      <div class="rcount num"><b>${n}</b><span>${n === 1 ? 'record' : 'records'}</span></div>
+      <div class="rbot">${ds.length ? `<a class="avstack" href="#doctors" aria-label="Doctors">${ds.map(d => av(d.name, d.tone)).join('')}</a>` : `<span class="rhint">Add your first visit to start</span>`}
+        ${newCount ? `<span class="pill white">+${newCount} this month</span>` : ''}</div>
+    </div>
+    <div class="ractions"><a class="obtn" href="#add-visit">${I('note_add')}Add visit</a><button type="button" class="obtn" data-act="snap">${I('photo_camera')}Snap report</button></div></section>`;
+  const head = `${top}${greet}${hero}${passNudge()}`;
   if (!vs.length && !tests().length) {
-    return { noHead:true, body: `${top}${hero}${month}${ql}<section>${secH('What Docly keeps')}<div class="card list div">
+    return { noHead:true, body: `${head}<section>${secH('What Docly keeps')}<div class="card list div">
       ${row({ lead: tile('note_add'), t:'Visits', s:'Doctor, date and notes', end: chev(), href:'add-visit' })}
       ${row({ lead: tile('photo_camera'), t:'Tests and reports', s:'Snap a page or upload a file', end: chev(), href:'add-test' })}
       ${row({ lead: tile('medication'), t:'Medications', s:'What you take and who prescribed it', end: chev(), href:'add-med' })}</div></section>` };
@@ -583,10 +588,10 @@ function homeMob(){
   const rv = vs.slice(0,2).map(v => row({ lead: dtile(v.date), t: esc(doc(v.doc).name), s: esc(v.short || v.reason), end: chev(), href:`visit-${v.id}` })).join('');
   const att = fu.map(v => { const dl = days(v.follow), d = doc(v.doc);
     return `<div class="card list">${row({ lead: dtile(v.follow, dl < 0), t: esc(d.name), s: esc(v.follow && dl < 0 ? 'Recheck · follow-up overdue' : 'Follow-up visit'), end: dl < 0 ? pill(`${-dl} days late`,'red') : pill('Upcoming','teal'), href:`visit-${v.id}` })}</div>`; }).join('');
-  const pts = pt.length ? `<div class="card list div">${pt.slice(0,3).map(t => row({ lead: tile(t.name === 'ECG' ? 'ecg_heart' : 'science'), t: esc(t.name),
+  const pts = pt.length ? `<div class="card list div">${pt.slice(0,3).map(t => row({ lead: tile(t.name === 'ECG' ? 'monitor_heart' : 'science'), t: esc(t.name),
       s: t.status === 'done' ? 'Report not added yet' : `Advised by ${esc(doc(t.doc)?.name || '')}`,
       end: `<span class="end"><span class="s num">${t.status === 'advised' ? 'Due ' : ''}${dm(t.date)}</span>${t.status === 'advised' ? pill('To do','blue') : pill('Done','teal')}</span>`, href:`test-${t.id}` })).join('')}</div>` : '';
-  return { noHead:true, body: `${top}${hero}${passNudge()}${month}${ql}
+  return { noHead:true, body: `${head}
     <section>${secH('Recent visits','See all','doctors')}<div class="card list div">${rv}</div></section>
     ${att || pts ? `<section>${secH('Needs attention')}<div class="stack-sm">${att}${pts}</div></section>` : ''}` };
 }
