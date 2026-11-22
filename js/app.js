@@ -492,7 +492,7 @@ function authView(name, desk){
       <div class="bottom"><a class="btn btn-primary btn-block" href="#login">Get started${I('arrow_forward')}</a>
       <span class="small-link">Already have an account? <a class="link" href="#login">Sign in</a></span></div></div>`;
   if (name === 'login') return `<form class="auth-m" data-form="login" novalidate><div class="grow">${loginForm(false)}</div>
-      <div class="bottom">${loginBtn()}${passSwitch()}
+      <div class="bottom">${loginBtn()}
       <span class="small-link">${U.authMode === 'signin' ? `New to Docly? <a class="link" href="#" data-act="mode">Create an account</a>` : `Have an account? <a class="link" href="#" data-act="mode">Sign in</a>`}</span></div></form>`;
   return `<form class="auth-m" data-form="code" novalidate><div class="grow">${codeBlock(false, true)}</div>
       <div class="bottom"><button class="btn btn-primary btn-block" type="submit">Verify${I('arrow_forward')}</button>
@@ -508,8 +508,8 @@ function passNudge(){
 }
 function loginBtn(){ const pw = U.usePass && U.authMode === 'signin';
   return `<button class="btn btn-primary btn-block" type="submit"${!pw && LIVE && mailLeft() ? ' disabled' : ''}>${pw ? 'Sign in' : 'Send code'}${I('arrow_forward')}</button>`; }
-function passSwitch(){ if (U.authMode !== 'signin') return '';
-  return `<span class="small-link" style="text-align:center">${U.usePass ? `Forgot it? <a class="link" href="#" data-act="usepass">Use an email code instead</a>` : `Have a password? <a class="link" href="#" data-act="usepass">Sign in with password</a>`}</span>`; }
+function passSwitch(m){ if (U.authMode !== 'signin') return '';
+  return `<span class="small-link${m ? ' pswitch-m' : ''}" style="text-align:${m ? 'right' : 'center'}">${U.usePass ? `Forgot it? <a class="link" href="#" data-act="usepass">Use an email code instead</a>` : `Have a password? <a class="link" href="#" data-act="usepass">Sign in with password</a>`}</span>`; }
 const MAILKEY = 'docly_mail_wait';
 function mailLeft(){ let t = 0; try { t = +localStorage.getItem(MAILKEY) || 0; } catch(e) { t = U.mailUntil || 0; } return Math.max(0, t - Date.now()); }
 function setMailWait(ms){ const until = Date.now() + ms; U.mailUntil = until; try { localStorage.setItem(MAILKEY, String(until)); } catch(e) {} }
@@ -518,8 +518,8 @@ function loginForm(desk){
   const wait = LIVE ? mailLeft() : 0;
   const errHtml = wait ? `<span class="err-text" id="emailErr" role="status">${wait > 300000 ? 'Limit: 2 emails per hour.' : 'Please wait.'} Try again in <b id="mailWait">${mmss(wait)}</b>.</span>` : (U.emailErr ? `<span class="err-text" id="emailErr">${esc(U.emailErr)}</span>` : '');
   const pw = U.usePass && U.authMode === 'signin';
-  const title = U.authMode === 'signin' ? 'Welcome back.' : 'Create your account.';
-  const lead = pw ? 'Enter your email and password.' : "Enter your email. We'll send you a 6-digit code, no password needed.";
+  const title = U.authMode === 'signin' ? 'Welcome back' : 'Create your account';
+  const lead = pw ? 'Enter your email and password.' : U.authMode === 'signin' ? "Enter your email. We'll send you a 6-digit code, no password needed." : "Enter your email. We'll send you a 6-digit code to set up your account.";
   const pwField = pw ? `<div class="field"><label for="password">Password</label>
       <div class="pw"><input class="input ${U.passErr ? 'err' : ''}" id="password" name="password" type="${U.showPw ? 'text' : 'password'}" autocomplete="current-password" placeholder="Your password" aria-describedby="passErr">
       <button type="button" class="eye" data-act="showpw" aria-label="${U.showPw ? 'Hide password' : 'Show password'}">${I(U.showPw ? 'visibility_off' : 'visibility')}</button></div>
@@ -527,7 +527,7 @@ function loginForm(desk){
   const fields = `<div class="field"><label for="email">Your Email</label>
       <input class="input ${U.emailErr || wait ? 'err' : ''}" id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@email.com" value="${esc(U.emailDraft || '')}" aria-describedby="emailErr">
       ${pw ? (U.emailErr ? `<span class="err-text" id="emailErr">${esc(U.emailErr)}</span>` : '') : errHtml}</div>${pwField}`;
-  if (!desk) return `<div class="ahead">${logo()}<div class="atext"><h1>${title}</h1><p class="lead">${lead}</p></div></div><div class="afields">${fields}</div>`;
+  if (!desk) return `<div class="ahead">${logo()}<div class="atext"><h1>${title}</h1><p class="lead">${lead}</p></div></div><div class="afields">${fields}${passSwitch('m')}</div>`;
   return `<form data-form="login" class="form" novalidate style="gap:21px"><div><h2>${title}</h2><p class="lead" style="margin-top:8px">${lead}</p></div>
     ${fields}${loginBtn()}${passSwitch()}
     <span class="small-link" style="text-align:center">${U.authMode === 'signin' ? `New to Docly? <a class="link" href="#" data-act="mode">Create an account</a>` : `Have an account? <a class="link" href="#" data-act="mode">Sign in</a>`}</span></form>`;
