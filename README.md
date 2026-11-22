@@ -8,5 +8,5 @@ See [SETUP.md](SETUP.md) to connect Supabase and publish on GitHub Pages.
 
 ## Versions
 
-- **V1.2** (2026-11-22): Design V2 look from Figma (🎨Design V2): light pastel records card on Home, greeting, white 28px cards with no shadow, 52px tiles and avatars, new header buttons, tab bar and inputs, lighter sign-in screens. Tag `v1.2`.
-- **V1.1**: first live version on Supabase + GitHub Pages. Tag `v1.1`.
+- **V1.2** (2026-11-22): Design V2 look from Figma (🎨Design V2): light pastel records card on Home, greeting, white 28px cards with no shadow, 52px tiles and avatars, new header buttons, tab bar and inputs, lighter sign-in screens. Branch `v1.2`.
+- **V1.1**: first live version on Supabase + GitHub Pages. Branch `v1.1`.
