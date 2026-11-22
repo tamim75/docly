@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Mona+Sans:wght@600&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..24,400,0..1,0&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0&display=block">
 <style>
 /* Layout: desktop = 248px sidebar + dashboard canvas; mobile (<900px) = stacked screens with bottom tab bar.
    Single light look, matching the Docly Figma. Spacing on the golden scale 5/8/13/21/34/55. */
@@ -39,7 +39,7 @@ input,select,textarea{font:inherit;color:inherit}
 h1,h2,h3,p{margin:0}
 h1,h2{text-wrap:balance}
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px}
-.mi{font-family:'Material Symbols Rounded';font-weight:400;font-style:normal;font-size:20px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;-webkit-font-feature-settings:'liga';font-feature-settings:'liga';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;-webkit-font-smoothing:antialiased;flex:none}
+.mi{font-family:'Material Symbols Outlined';font-weight:400;font-style:normal;font-size:20px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;-webkit-font-feature-settings:'liga';font-feature-settings:'liga';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;-webkit-font-smoothing:antialiased;flex:none}
 .mi.fill{font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24}
 .num{font-variant-numeric:tabular-nums}
 .muted{color:var(--ink-62)}
@@ -488,6 +488,141 @@ textarea.input{border-radius:21px}
 .sheet{border-radius:28px 28px 0 0}
 @media (min-width:900px){.sheet{border-radius:28px}}
 .share-card{border-radius:28px}
+
+/* ================= V1.2 · exact match pass (Figma frames, 390 wide) ================= */
+.icon-btn .mi{font-size:16px}
+.tile{color:var(--ink)}
+.tile.teal{color:var(--teal)}
+.mapp .mhead{display:block;padding-top:14px;padding-bottom:32px;min-height:118px}
+.mhead .hrow{display:flex;align-items:center;gap:20px}
+.mhead .body{display:flex;flex-direction:column;gap:12px;padding-top:0}
+.mhead h1{letter-spacing:-.1px}
+.mapp .mbody{gap:34px}
+.mapp .sec-h{margin-bottom:13px;min-height:24px}
+.mapp .sec-h .link{font-size:12px;line-height:16px;font-weight:600;color:var(--teal)}
+.mapp .card.list{padding:12px 24px}
+.mapp .card.list .row{padding:12px 0;min-height:76px}
+.mapp .card.list.div{padding:0 24px}
+.mapp .card.list.div .row{padding:24px 0;min-height:100px}
+.mapp .list.div .row + .row{border-top:1px solid rgba(15,42,74,.08)}
+.mapp .row .chev{color:var(--ink-76);font-size:24px}
+.mapp .chips{gap:8px}
+.mapp .chips.scroll{padding-block:0}
+.mapp .chip{height:44px;padding:0 13px;border-radius:22px;background:#fff;box-shadow:none;border:1px solid rgba(15,42,74,.08);color:rgba(15,42,74,.8);font-size:12px;line-height:16px;font-weight:600}
+.mapp .chip:hover{border-color:rgba(15,42,74,.16);box-shadow:none}
+.mapp .chip.on{background:#0B5E6B;border-color:#0B5E6B;color:#fff}
+.mapp .chip .mi{font-size:16px}
+.pill.grey{background:#EEF1F4;color:rgba(15,42,74,.62)}
+.pill.teal{background:#D3EEEC;color:#0B5E6B}
+.pill.blue{background:var(--blue-tint);color:var(--blue-ink)}
+.mapp .kv{padding:24px;display:flex;flex-direction:column;gap:24px}
+.mapp .kv div{padding:0;font-size:12px;line-height:16px}
+.mapp .kv dt{font-weight:500;color:var(--ink-76)}
+.mapp .kv dd{font-weight:600;color:var(--ink)}
+.mapp .quote{padding:24px;font-size:16px;line-height:24px;font-weight:400}
+.mapp .card.pad{padding:24px}
+.mapp .empty{padding:12px 0;font-size:12px;line-height:16px;color:var(--ink-76)}
+.mapp .pages{gap:13px}
+.mapp .page{aspect-ratio:auto;height:206px;border-radius:21px;padding:0 0 13px 13px;gap:8px;justify-content:flex-end;box-shadow:0 11px 22px rgba(15,42,74,.02),0 6.85px 13.7px rgba(15,42,74,.03),0 4.24px 8.48px rgba(15,42,74,.03),0 2.62px 5.24px rgba(15,42,74,.04),0 1.62px 3.24px rgba(15,42,74,.04),0 1px 2px rgba(15,42,74,.05)}
+.mapp .page i{height:5px;border-radius:3px;background:rgba(15,42,74,.08)}
+.mapp .page i.w1{width:120px!important}.mapp .page i.w2{width:80px!important}
+.mapp .page span{font-size:12px;line-height:16px;font-weight:500;color:var(--ink-76);margin-top:0!important}
+.mapp .page.img span{color:var(--ink)}
+/* Mobile home keeps its own spacing (card padding 21, rows 10 apart, section gap 32) */
+.mhome .mbody{gap:32px}
+.mhome .sec-h{margin-bottom:16px}
+.mhome .card.list{padding:11px 21px}
+.mhome .card.list .row{padding:10px 0;min-height:72px}
+.mhome .card.list.div{padding:11px 21px}
+.mhome .card.list.div .row{padding:10px 0;min-height:72px}
+.mhome .stack-sm{gap:16px}
+.mstack{display:flex;flex-direction:column;gap:21px}
+.mapp .donly{display:none}
+.mapp .kv{margin:0}
+.mapp .page{gap:8px}
+.mapp .page span{margin-top:-8px!important}
+.noreport{display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center}
+.mapp .noreport{padding:34px 24px}
+.noreport b{font-size:16px;line-height:24px;font-weight:600}
+.noreport p{font-size:16px;line-height:24px;color:var(--ink-76)}
+.mapp .noreport .btn{height:52px;font-size:16px;padding:0 12px}
+.mapp .danger{display:flex;flex-direction:column;gap:24px;text-align:center}
+.mapp .danger p{font-size:12px;line-height:16px;font-weight:500;color:var(--ink-76)}
+.danger-btn{color:#B42318;height:52px;font-size:16px;font-weight:600}
+.mapp .mstick{padding-bottom:calc(34px + env(safe-area-inset-bottom,0px))}
+.mapp.stick{padding-bottom:calc(120px + env(safe-area-inset-bottom,0px))}
+.chip .emo{font-size:12px;line-height:1;margin-left:-2px}
+.danger-btn{background:#fff;box-shadow:inset 0 0 0 1px #E3E5EA, inset 0 -2px 4px rgba(227,229,234,.6), 0 1px 2px rgba(0,0,0,.05)}
+.danger-btn:hover{box-shadow:inset 0 0 0 1px #CBD0D8, inset 0 -2px 4px rgba(227,229,234,.6), 0 4px 10px rgba(15,42,74,.06)}
+.mapp .card.noreport{padding:34px 24px}
+.noreport .btn-white{box-shadow:inset 0 0 0 1px #E3E5EA, inset 0 -2px 4px rgba(227,229,234,.6), 0 1px 2px rgba(0,0,0,.05)}
+.mapp .hcards{gap:21px}
+.mapp .hcard{padding:24px;gap:24px}
+.mapp .hcard h3{font-size:16px;line-height:24px;font-weight:600}
+.mapp .hcard p{font-size:12px;line-height:16px;font-weight:500;color:var(--ink-76)}
+.mapp .hcard .divider{margin:0!important;height:1px;background:rgba(15,42,74,.08)}
+.mapp .hcard .chips .chip{height:44px;font-size:12px;font-weight:600}
+.mapp .narrow{gap:34px}
+.mapp .narrow > .field{gap:13px}
+.mapp .field > label, .mapp .label{font-size:12px;line-height:16px;font-weight:600}
+.mapp .copybox{height:40px;border-radius:20px;border:2px solid #E3E5EA;background:#fff;padding:0 4px 0 16px;box-shadow:inset 0 8px 13px rgba(15,42,74,.04)}
+.mapp .copybox span{font-size:16px;line-height:24px}
+.mapp .copybox .btn{height:30px;font-size:12px;padding:0 12px}
+.scope{display:flex;flex-direction:column;gap:21px}
+.mapp .scope{gap:13px}
+.mapp .copybox{margin-top:-5px}
+.mapp .stack{gap:34px}
+.mapp .card.list.div.compact{padding:11px 21px}
+.mapp .card.list.div.compact .row{padding:10px 0;min-height:72px}
+.mapp .row .end .s{font-size:12px;line-height:16px;font-weight:500;color:var(--ink-76)}
+.ifield{position:relative;display:block}
+.ifield > .mi{display:none}
+.mapp .ifield > .mi{display:block;position:absolute;left:20px;top:50%;transform:translateY(-50%);font-size:20px;color:var(--ink);pointer-events:none;z-index:1}
+.mapp .ifield .input{padding-left:50px;width:100%}
+.mapp .ifield input::-webkit-calendar-picker-indicator{opacity:0;position:absolute;inset:0;width:auto;height:auto;cursor:pointer}
+.mapp .form{gap:32px}
+.mapp .form .field{gap:8px}
+.mapp .form .grid2{grid-template-columns:1fr 1fr;gap:13px}
+.mapp .form .field .opt{font-weight:600;color:var(--ink)}
+.mapp .form .btns2{gap:13px}
+.mapp .form .btns2 .btn{height:52px;font-size:16px}
+.mapp textarea.grow{min-height:52px;height:auto;field-sizing:content;resize:none;padding-top:13px;padding-bottom:13px;line-height:22px}
+.btn-text{align-self:flex-start;height:52px;padding:0 20px;background:none;box-shadow:none;color:var(--ink-76);font-size:16px;font-weight:600}
+.btn-text:hover{color:var(--ink)}
+.fgroup{display:flex;flex-direction:column;gap:21px}
+.fgroup.chambers{gap:21px}
+.chgroup{display:flex;flex-direction:column;gap:13px}
+.chgroup .sec-h{margin:0}
+.fgroup.tight{gap:16px}
+.mapp .chgroup .sec-h{margin:0}
+.mapp .fgroup .btn-white{height:52px;font-size:16px;font-weight:600}
+/* Auth, exact (Figma Login / OTP / Get started) */
+.auth-m{padding-top:clamp(40px, 24.5vh, 198px);padding-bottom:calc(34px + env(safe-area-inset-bottom,0px))}
+.auth-m .grow{flex:1;justify-content:flex-start;gap:34px}
+.auth-m .ahead{display:flex;flex-direction:column;gap:55px}
+.auth-m .ahead{align-items:flex-start}
+.auth-m .ahead .atext{align-self:stretch}
+.auth-m .ahead .logo{font-size:28px;gap:4px;height:26px}
+.auth-m .ahead .logo svg{width:26px;height:26px}
+.auth-m .atext{display:flex;flex-direction:column;gap:13px}
+.auth-m .atext .lead{max-width:328px}
+.auth-m .afields{display:flex;flex-direction:column;gap:21px}
+.auth-m .bottom{gap:13px;padding-top:21px}
+.auth-m .small-link{font-size:12px;line-height:16px}
+.auth-m .acode{display:flex;flex-direction:column;gap:21px}
+.auth-m .otp{justify-content:space-between;gap:0}
+.auth-m .otp input{width:52px;height:52px;max-width:52px;flex:none;border-radius:12px;border:2px solid #E3E5EA;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.12px;box-shadow:inset 0 8px 13px rgba(15,42,74,.04)}
+.auth-m .otp input:focus{border:1.5px solid var(--teal);box-shadow:inset 0 8px 13px rgba(15,42,74,.04), 0 0 0 4px rgba(10,125,132,.12)}
+.auth-m .astatus{display:flex;flex-direction:column;gap:5px}
+.auth-m .astatus .hint, .auth-m .astatus .link{font-size:14px;font-weight:500;color:#4F6370}
+.auth-m .astatus .link{color:var(--teal)}
+.auth-m .acode > .hint{font-size:12px;color:#4F6370;margin-top:-8px}
+@media (max-width:370px){.auth-m .otp input{width:44px;height:44px}}
+.auth-m.welcome .grow{align-items:center;text-align:center;padding-top:5px}
+.auth-m .welcome-art{width:138px;height:142px;margin:-15px 0 -13px}
+.auth-m.welcome .atext{max-width:308px}
+.auth-m.welcome h1{font-size:32px;line-height:46px;letter-spacing:-.64px}
+.auth-m.welcome h1 span{color:#4BA6CC}
 </style>
 
 
