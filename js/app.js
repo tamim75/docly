@@ -471,6 +471,28 @@ function tabbar(tab){
   return `<nav class="tabbar" aria-label="Main">${a('home','home','Home')}${a('tests','science','Tests')}<button type="button" class="fab" data-act="fab" aria-label="Add">${I('add')}</button>${a('doctors', tab === 'doctors' ? 'medical_services' : 'stethoscope','Doctors')}${a('me','account_box','Me')}</nav>`;
 }
 
+/* Start screen · Figma "V2-01 Welcome" (699:30828) */
+function welcomeView(){
+  const row = (lead, t, sub, end) => `<div class="wrow">${lead}<div class="wtx"><b>${t}</b><small>${sub}</small></div>${end}</div>`;
+  const date = (d, m) => `<span class="wdate"><b>${d}</b><small>${m}</small></span>`;
+  const tile = ic => `<span class="wtile">${I(ic)}</span>`;
+  const st = (d, pill, cls) => `<span class="wst"><small>${d}</small><i class="${cls}">${pill}</i></span>`;
+  const ql = (ic, t) => `<span class="wql"><span class="wtile">${I(ic)}</span>${t}</span>`;
+  return `<div class="auth-m welcome2">
+    <span class="warc a1" aria-hidden="true"></span><span class="warc a2" aria-hidden="true"></span>
+    <div class="wcollage" aria-hidden="true"><div class="wstage">
+      <div class="wc wglass"><div class="whead"><div><b>24 health records</b><small>Last added 12 Aug</small></div>${I('chevron_right')}</div>
+        <div class="wpills"><span>${I('note_add')}Add visit</span><span>${I('photo_camera')}Snap report</span></div></div>
+      <div class="wc wvisits">${row(date('12','AUG'),'Dr. Rafiqul Haque','BP still high · continue Amlodipine', I('chevron_right'))}<hr>${row(date('03','JUL'),'Dr. Shirin Akhter','Skin clear · stop the cream', I('chevron_right'))}</div>
+      <div class="wc wtests">${row(tile('science'),'Lipid profile','Advised by Dr. Rafiqul Haque', st('Due 15 Sep','To do','todo'))}<hr>${row(tile('monitor_heart'),'ECG','Report not added yet', st('12 Aug','Done','done'))}</div>
+      <div class="wc wlinks">${ql('science','Tests')}${ql('medical_services','Doctors')}${ql('group','Profiles')}</div>
+    </div><div class="wfade"></div></div>
+    <div class="wcontent">${logo()}<h1>All your health records,<br><span>filed by doctor, kept<br>in one place.</span></h1></div>
+    <div class="wbtns"><a class="btn btn-primary btn-block" href="#login" data-act="authgo" data-mode="signup">Create account</a>
+      <a class="btn btn-white btn-block" href="#login" data-act="authgo" data-mode="signin">I have an account</a></div>
+  </div>`;
+}
+
 /* ================= Auth ================= */
 function authView(name, desk){
   if (desk) {
@@ -485,12 +507,7 @@ function authView(name, desk){
       <button type="button" class="x" data-act="go" data-href="login" aria-label="Close">${I('close')}</button>
       ${codeBlock(true)}</div></div>`;
   }
-  if (name === 'welcome') return `<div class="auth-m welcome"><div class="grow">
-      <img class="welcome-art" src="welcome.svg" width="138" height="142" alt="">
-      <div class="atext"><h1>All your health records. <span>One place.</span></h1>
-      <p class="lead">Prescriptions, test reports and visits, kept safe for you and your family.</p></div></div>
-      <div class="bottom"><a class="btn btn-primary btn-block" href="#login">Get started${I('arrow_forward')}</a>
-      <span class="small-link">Already have an account? <a class="link" href="#login">Sign in</a></span></div></div>`;
+  if (name === 'welcome') return welcomeView();
   if (name === 'login') return `<form class="auth-m" data-form="login" novalidate><div class="grow">${loginForm(false)}</div>
       <div class="bottom">${loginBtn()}
       <span class="small-link">${U.authMode === 'signin' ? `New to Docly? <a class="link" href="#" data-act="mode">Create an account</a>` : `Have an account? <a class="link" href="#" data-act="mode">Sign in</a>`}</span></div></form>`;
@@ -1194,6 +1211,7 @@ const ACTS = {
   showpw(el, e){ e.preventDefault(); const v = document.getElementById('password')?.value || ''; U.showPw = !U.showPw; render(); const i = document.getElementById('password'); if (i) { i.value = v; i.focus(); } },
   showpw2(el){ U.showPw = el.checked; ['np1','np2'].forEach(id => { const i = document.getElementById(id); if (i) i.type = el.checked ? 'text' : 'password'; }); },
   nudgeoff(){ U.nudgeOff = true; try { localStorage.setItem(NUDGEKEY, LIVE && USER ? USER.id : 'demo'); } catch(e) {} render(); },
+  authgo(el, e){ e.preventDefault(); U.authMode = el.dataset.mode; U.usePass = false; go('login'); },
   mode(el, e){ e.preventDefault(); U.authMode = U.authMode === 'signin' ? 'signup' : 'signin'; render(); },
   resend(el, e){ e.preventDefault(); API.sendCode(S.email).then(() => { U.resendAt = Date.now() + 60000; U.otpErr = ''; U.expired = false; U.tries = 3; toast('New code sent'); }, err => { U.otpErr = friendly(err); render(); }); },
   fab(){ openSheet({ title:'Add to records', items:[
