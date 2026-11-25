@@ -453,9 +453,10 @@ function deskShell(r, v){
   </div>${v.overlay || ''}`;
 }
 function mobShell(r, v){
-  const top = ['home','tests','doctors','me'].includes(r.name);
+  // Bottom nav stays on every browse page (tabs, lists, details); only forms and the photo viewer hide it.
+  const top = !/^(add-|edit)|^(photo|password|setup)$/.test(r.name);
   const tab = TAB_OF[r.name] || 'home';
-  const cls = ['mapp', top ? 'tabs' : '', v.stick ? 'stick' : '', r.name === 'home' ? 'mhome' : ''].join(' ');
+  const cls = ['mapp', top ? 'tabs' : '', v.stick ? 'stick' : '', top && v.stick ? 'tabstick' : '', r.name === 'home' ? 'mhome' : ''].join(' ');
   const head = v.noHead ? '' : mHead(v);
   const off = navigator.onLine === false ? banner('offline', 'wifi_off', "You're offline. Changes will sync when you're back.") : '';
   return `<div class="${cls}">${head}<div class="mpad mbody">${off}${v.body}</div></div>
